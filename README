@@ -1,0 +1,10 @@
+TCP Brute Force
+---------------
+
+Attempt to break the same-origin policy using a brute force TCP attack.
+
+Receive a few connections from a victim to learn upper 8 bits of sequence
+number, and source port pattern (increment by 1, etc).
+
+Then, have the victim make several connections to site (not attacker
+controlled), and the rest should be obvious :) 
