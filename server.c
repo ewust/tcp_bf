@@ -84,6 +84,7 @@ int main(int argc, char *argv[])
     int sock;
     struct sockaddr_in sin;
 
+    event_init();
     base = event_base_new();
 
     sock = socket(AF_INET, SOCK_STREAM, 0); 
