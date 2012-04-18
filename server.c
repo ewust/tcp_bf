@@ -5,13 +5,14 @@
 #include <event2/listener.h>
 #include <event2/bufferevent.h>
 #include <event2/buffer.h>
-#include <event-config.h>
 #include <event2/util.h>
 #include <unistd.h>
 #include <getopt.h>
 #include <sys/queue.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include "forge_socket.h"
 #include <string.h>
 
@@ -51,11 +52,11 @@ void on_tcp_accept(struct evconnlistener *listener,
                    evutil_socket_t sock, struct sockaddr *addr, int socklen, void *ptr)
 {
     struct event_base *base = evconnlistener_get_base(listener);
-    struct bufferevent *bev = bufferevent_socket_new(base, sock, BEV_OPT_CLOSE_ON_FREE);
-    bufferevent_setcb(bev, echo_read_cb, NULL, NULL, NULL);
+    struct bufferevent *bev = bufferevent_socket_new(base, sock, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
+    bufferevent_setcb(bev, echo_read_cb, NULL, tcp_events, NULL);
     bufferevent_enable(bev, EV_READ|EV_WRITE);
 
-    printf("accept: %s\n", inet_ntoa(((struct sockaddr_in*)addr)->sin_addr));
+    printf("accept: %p %s\n", bev, inet_ntoa(((struct sockaddr_in*)addr)->sin_addr));
     event_base_dump_events(base, stdout); 
 
     return;
@@ -128,6 +129,7 @@ int main(int argc, char *argv[])
         perror("bind");
         return -1;
     }
+    fcntl(sock, F_SETFL, O_NONBLOCK); // Eh, ok.
 
 /*
     if (listen(sock, 5) < 0) {
@@ -137,7 +139,7 @@ int main(int argc, char *argv[])
 */
    
     struct evconnlistener *listener;
-    listener = evconnlistener_new(base, on_tcp_accept, NULL, LEV_OPT_CLOSE_ON_FREE|LEV_OPT_LEAVE_SOCKETS_BLOCKING, 5, sock); 
+    listener = evconnlistener_new(base, on_tcp_accept, NULL, LEV_OPT_CLOSE_ON_FREE, -1, sock); 
     
     event_base_dump_events(base, stdout);
 
