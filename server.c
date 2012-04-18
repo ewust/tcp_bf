@@ -1,3 +1,5 @@
+
+#include <stdlib.h>
 #include <event2/event.h>
 #include <event2/event_struct.h>
 #include <event2/listener.h>
@@ -8,11 +10,16 @@
 #include <unistd.h>
 #include <getopt.h>
 #include <sys/queue.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include "forge_socket.h"
 #include <string.h>
 
 #define DEFAULT_SPORT   888
-#define RESPONSE "HTTP/1.0 200 OK\r\nContent-type: text/html;\r\n\r\n<html><h1>Hi</h1></html>\n"
+
+#define RESPONSE "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nConnection: close\r\nContent-type: text/html;\r\n\r\n%s\n"
+
+#define HTML_CODE "<html><h1>Hi</h1></html>"
 
 void http_req_cb(struct bufferevent *bev, void *ctx)
 {
@@ -27,13 +34,41 @@ void tcp_events(struct bufferevent *bev, short events, void *ctx)
     printf("got some events\n");
 }
 
-void tcp_accept(struct evconnlistener *listener, evutil_socket_t sock, 
-                struct sockaddr *addr, int len, void *ptr)
+void on_read(int sock, short type, void *arg)
 {
-    struct tcp_state state;
+    printf("on_read(%d, %d, %p)\n", sock, type, arg);    
+    
+}
+
+void echo_read_cb(struct bufferevent *bev, void *ctx)
+{
+    fprintf(stderr, "echo read cb\n");
+    exit(1);
+    evbuffer_add_buffer(bufferevent_get_output(bev), bufferevent_get_input(bev));
+}
+
+void on_tcp_accept(struct evconnlistener *listener, 
+                   evutil_socket_t sock, struct sockaddr *addr, int socklen, void *ptr)
+{
     struct event_base *base = evconnlistener_get_base(listener);
-    int state_len = sizeof(state);
+    struct bufferevent *bev = bufferevent_socket_new(base, sock, BEV_OPT_CLOSE_ON_FREE);
+    bufferevent_setcb(bev, echo_read_cb, NULL, NULL, NULL);
+    bufferevent_enable(bev, EV_READ|EV_WRITE);
+
+    printf("accept: %s\n", inet_ntoa(((struct sockaddr_in*)addr)->sin_addr));
+    event_base_dump_events(base, stdout); 
+
+    return;
+    sleep(1);
+    int r;
+    if ((r=send(sock, RESPONSE, strlen(RESPONSE), 0)) < 0) {
+        perror("send");
+    }
+    printf("sent %d bytes\n", r);
+    
 /*
+    struct tcp_state state;
+    int state_len = sizeof(state);    
     if (getsockopt(sock, IPPROTO_TCP, TCP_STATE, &state, &state_len) < 0) {
         perror("getsockopt");
         return;
@@ -41,15 +76,6 @@ void tcp_accept(struct evconnlistener *listener, evutil_socket_t sock,
     unsigned int isn = state.ack - 1;
     printf("browser ISN: %08x (%u)\n", isn, isn);
 */
-
-    struct bufferevent *bev = bufferevent_socket_new(base, sock, BEV_OPT_CLOSE_ON_FREE);
-    bufferevent_setcb(bev, http_req_cb, NULL, tcp_events, NULL);
-    bufferevent_enable(bev, EV_READ|EV_WRITE);
-    if (evbuffer_add_printf(bufferevent_get_output(bev), RESPONSE) < 0) {
-        printf("asdasd\n");
-        perror("wtf");
-    }
-    printf("...\n");
 }
 
 
@@ -84,7 +110,6 @@ int main(int argc, char *argv[])
     int sock;
     struct sockaddr_in sin;
 
-    event_init();
     base = event_base_new();
 
     sock = socket(AF_INET, SOCK_STREAM, 0); 
@@ -105,19 +130,16 @@ int main(int argc, char *argv[])
     }
 
 /*
-
     if (listen(sock, 5) < 0) {
         perror("listen");
         return -1;
     }
 */
-
-    struct evconnlistener *evlisten;
-    evlisten = evconnlistener_new(base, tcp_accept, base, LEV_OPT_CLOSE_ON_FREE|LEV_OPT_REUSEABLE, 5, sock);
-    if (!evlisten) {
-        perror("couldn't create listener");
-        return -1;
-    }
+   
+    struct evconnlistener *listener;
+    listener = evconnlistener_new(base, on_tcp_accept, NULL, LEV_OPT_CLOSE_ON_FREE|LEV_OPT_LEAVE_SOCKETS_BLOCKING, 5, sock); 
+    
+    event_base_dump_events(base, stdout);
 
     event_base_dispatch(base);
     
