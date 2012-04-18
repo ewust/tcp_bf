@@ -55,18 +55,6 @@ void on_tcp_accept(struct evconnlistener *listener,
     bufferevent_enable(bev, EV_READ|EV_WRITE);
     evbuffer_add_printf(bufferevent_get_output(bev), RESPONSE, strlen(HTML_CODE), HTML_CODE);
 
-    printf("accept: %p %s\n", bev, inet_ntoa(((struct sockaddr_in*)addr)->sin_addr));
-    event_base_dump_events(base, stdout); 
-
-    return;
-    sleep(1);
-    int r;
-    if ((r=send(sock, RESPONSE, strlen(RESPONSE), 0)) < 0) {
-        perror("send");
-    }
-    printf("sent %d bytes\n", r);
-    
-/*
     struct tcp_state state;
     int state_len = sizeof(state);    
     if (getsockopt(sock, IPPROTO_TCP, TCP_STATE, &state, &state_len) < 0) {
@@ -74,8 +62,7 @@ void on_tcp_accept(struct evconnlistener *listener,
         return;
     }
     unsigned int isn = state.ack - 1;
-    printf("browser ISN: %08x (%u)\n", isn, isn);
-*/
+    printf("accept: %s ISN: %08x (%u)\n", inet_ntoa(((struct sockaddr_in*)addr)->sin_addr), isn, isn);
 }
 
 
