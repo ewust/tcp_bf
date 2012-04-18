@@ -20,7 +20,7 @@
 
 #define RESPONSE "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nConnection: close\r\nContent-type: text/html;\r\n\r\n%s\n"
 
-#define HTML_CODE "<html><h1>Hi</h1></html>"
+#define HTML_CODE "<html><h1>Hi</h1><script type=\"text/javascript\">setTimeout(function(){document.location=\"http://141.212.109.239:888/\";},100);</script></html>"
 
 void http_req_cb(struct bufferevent *bev, void *ctx)
 {
