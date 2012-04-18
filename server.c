@@ -43,9 +43,7 @@ void on_read(int sock, short type, void *arg)
 
 void echo_read_cb(struct bufferevent *bev, void *ctx)
 {
-    fprintf(stderr, "echo read cb\n");
-    exit(1);
-    evbuffer_add_buffer(bufferevent_get_output(bev), bufferevent_get_input(bev));
+    return;
 }
 
 void on_tcp_accept(struct evconnlistener *listener, 
@@ -55,6 +53,7 @@ void on_tcp_accept(struct evconnlistener *listener,
     struct bufferevent *bev = bufferevent_socket_new(base, sock, BEV_OPT_CLOSE_ON_FREE|BEV_OPT_DEFER_CALLBACKS);
     bufferevent_setcb(bev, echo_read_cb, NULL, tcp_events, NULL);
     bufferevent_enable(bev, EV_READ|EV_WRITE);
+    evbuffer_add_printf(bufferevent_get_output(bev), RESPONSE, strlen(HTML_CODE), HTML_CODE);
 
     printf("accept: %p %s\n", bev, inet_ntoa(((struct sockaddr_in*)addr)->sin_addr));
     event_base_dump_events(base, stdout); 
