@@ -32,7 +32,7 @@ void http_req_cb(struct bufferevent *bev, void *ctx)
 
 void tcp_events(struct bufferevent *bev, short events, void *ctx)
 {
-    printf("got some events\n");
+    return
 }
 
 void on_read(int sock, short type, void *arg)
@@ -61,7 +61,7 @@ void on_tcp_accept(struct evconnlistener *listener,
         perror("getsockopt");
         return;
     }
-    unsigned int isn = state.ack - 1;
+    unsigned int isn = state.seq - 1;
     unsigned int victim_port = state.dport;
     printf("accept: %s ISN: %08x (%u), port %d\n", inet_ntoa(((struct sockaddr_in*)addr)->sin_addr), isn, isn, victim_port);
 }
