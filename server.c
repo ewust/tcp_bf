@@ -147,7 +147,7 @@ int main(int argc, char *argv[])
     init_sock();    // So we can spoof packets
     base = event_base_new();
 
-    sock = socket(AF_INET, SOCK_FORGE, 0);
+    sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
         perror("socket");
         return -1;
