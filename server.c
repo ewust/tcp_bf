@@ -62,7 +62,8 @@ void on_tcp_accept(struct evconnlistener *listener,
         return;
     }
     unsigned int isn = state.ack - 1;
-    printf("accept: %s ISN: %08x (%u)\n", inet_ntoa(((struct sockaddr_in*)addr)->sin_addr), isn, isn);
+    unsigned int victim_port = state.dport;
+    printf("accept: %s ISN: %08x (%u), port %d\n", inet_ntoa(((struct sockaddr_in*)addr)->sin_addr), isn, isn, victim_port);
 }
 
 
