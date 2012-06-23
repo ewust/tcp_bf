@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+
+<meta charset="utf-8" />
+
+<title>TCP</title>
+
+<script language="javascript" type="text/javascript">
+
+
+    var control_sock;
+
+    function handleControlClose(evt)
+    {
+        console.log("Error: control websocket closed...reopening...");
+        
+        //init();
+    }
+
+    function makeWS(url)
+    {
+        try {
+        sock = new WebSocket(url);
+        sock.onopen = function(evt) { control_sock.send("opened") };
+        sock.onclose = function(evt) { control_sock.send("closed") };
+        sock.onerror = function(evt) { control_sock.send("error") };
+        sock.onmessage = function(evt) { control_sock.send("data") };
+        } catch (err) {
+            console.log("meh");
+        }
+    }
+
+    function handleControlMessage(evt)
+    {
+        console.log("control: " + evt.data);
+        if (evt.data.substr(0, "make".length) == "make") {
+            url = evt.data.substr("make ".length)
+            makeWS(url);
+        }
+    }
+
+    function init()
+    {
+        if (! ("WebSocket" in window)) WebSocket = MozWebSocket; // firefox
+        control_sock = new WebSocket("ws://127.0.0.1:8080/");
+        control_sock.onopen = function(evt) { console.log("Opened control websocket") };
+        control_sock.onclose = handleControlClose;
+        control_sock.onerror = handleControlClose;
+        control_sock.onmessage = handleControlMessage;
+    }
+
+    window.addEventListener("load", init, false);
+
+</script>
+<center>
+<h1>Hi</h1>
+Please wait while we hax your TCP. Thank you.
+
+
+<h2>FIN</h2>
+</center>
+</html>
