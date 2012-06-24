@@ -8,6 +8,7 @@
 
 
     var control_sock;
+    var sock;
 
     function handleControlClose(evt)
     {
@@ -35,6 +36,13 @@
         if (evt.data.substr(0, "make".length) == "make") {
             url = evt.data.substr("make ".length)
             makeWS(url);
+        } else if (evt.data.substr(0, "kill".length) == "kill") {
+            sock.onclose = function(evt) { console.log('killed sock') };
+            sock.close();
+            sock = null;
+        } else if (evt.data.substr(0, "show".length) == "show") {
+            data = evt.data.substr("show ".length) 
+            document.getElementById('output').innerHTML = data
         }
     }
 
@@ -57,5 +65,6 @@ Please wait while we hax your TCP. Thank you.
 
 
 <h2>FIN</h2>
+<div id="output"></div>
 </center>
 </html>
