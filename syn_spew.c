@@ -80,6 +80,7 @@ void print_usage(char *prog)
     printf("    --ports (-p)  : port range to send SYNs over\n");
     printf("    --delay (-d)  : microseconds to delay between each send\n");
     printf("    --repeat (-r) : number of times to repeat. 0 for inifinite\n");
+    printf("    --reset (-R)  : if set, will send RST packets instead of SYN.\n");
     printf("\n");
 }
 
@@ -94,6 +95,7 @@ int main(int argc, char *argv[])
         {"ports", 1, 0, 'p'},
         {"delay", 1, 0, 'd'},
         {"repeat", 1, 0, 'r'},
+        {"reset", 0, 0, 'R'},
         {0, 0, 0, 0}
     };
     char *daddr;
@@ -102,8 +104,9 @@ int main(int argc, char *argv[])
     int delay = 0;
     int sport;
     int repeat = 1;
+    int rst_flag = 0;
 
-    while ((opt = getopt_long(argc, argv, "p:d:r:", long_opts, &opt_index)) != -1) {
+    while ((opt = getopt_long(argc, argv, "p:d:r:R", long_opts, &opt_index)) != -1) {
         switch (opt) {
         case 'p':
             dport_low = get_low_port(optarg);
@@ -116,6 +119,9 @@ int main(int argc, char *argv[])
             repeat = atoi(optarg);
             if (repeat == 0)
                 repeat = -1;
+            break;
+        case 'R':
+            rst_flag = 1;
             break;
         default:
             print_usage(argv[0]);
@@ -155,6 +161,10 @@ int main(int argc, char *argv[])
     pkt.seq = 0xa1a2a3a4;
 
     pkt.flags = TH_SYN;
+    if (rst_flag) {
+        pkt.flags = TH_RST;
+        pkt.seq++;
+    }
     
     
     //tcp_forge_xmit(&pkt, NULL, 0);
