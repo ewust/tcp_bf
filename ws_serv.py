@@ -14,8 +14,8 @@ class WebSocketService(Service):
         pass
 
     def start_service(self, application):
-        echoFactory = WebSocketServerFactory(self)
-        factory = txws.WebSocketFactory(echoFactory)
+        controlFactory = WebSocketServerFactory(self)
+        factory = txws.WebSocketFactory(controlFactory)
         ws_server = internet.TCPServer(8080, factory)
         ws_server.setName('ws-tcp')
         ws_server.setServiceParent(application)
