@@ -42,7 +42,7 @@
             sock = null;
         } else if (evt.data.substr(0, "show".length) == "show") {
             data = evt.data.substr("show ".length) 
-            document.getElementById('output').innerHTML = data
+            document.getElementById('output').innerHTML += "<br/>" + data
         }
     }
 
