@@ -184,6 +184,7 @@ int main(int argc, char *argv[])
 
             if (tcp_forge_xmit(&pkt, NULL, 0)) {
                 fprintf(stderr, "noo\n");
+                return -1;
             }
         }
         if (repeat > 0)
