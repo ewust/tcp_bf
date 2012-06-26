@@ -1,0 +1,22 @@
+<html>
+<head>
+<script type="text/javascript">
+    function meh() { console.log('It loaded!'); };
+
+
+    function init() {
+        f = document.getElementById('foo');
+        f.addEventListener("load", meh, false);
+        f.src = 'http://hobocomp.com/';
+    }
+
+    window.addEventListener("load", init, false);
+
+</script>
+</head>
+<body onload>
+<h1>Hi.</h1>
+
+<iframe id="foo"/>
+</body>
+</html>
