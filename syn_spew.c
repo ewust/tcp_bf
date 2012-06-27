@@ -80,6 +80,7 @@ void print_usage(char *prog)
     printf("    --ports (-p)  : port range to send SYNs over\n");
     printf("    --delay (-d)  : microseconds to delay between each send\n");
     printf("    --repeat (-r) : number of times to repeat. 0 for inifinite\n");
+    printf("    --time (-t)   : time (in milliseconds) to run for. Overrides -r.\n");
     printf("    --reset (-R)  : if set, will send RST packets instead of SYN.\n");
     printf("\n");
 }
@@ -96,6 +97,7 @@ int main(int argc, char *argv[])
         {"delay", 1, 0, 'd'},
         {"repeat", 1, 0, 'r'},
         {"reset", 0, 0, 'R'},
+        {"time", 1, 0, 't'},
         {0, 0, 0, 0}
     };
     char *daddr;
@@ -105,8 +107,9 @@ int main(int argc, char *argv[])
     int sport;
     int repeat = 1;
     int rst_flag = 0;
+    int time = 0;
 
-    while ((opt = getopt_long(argc, argv, "p:d:r:R", long_opts, &opt_index)) != -1) {
+    while ((opt = getopt_long(argc, argv, "p:d:r:Rt:", long_opts, &opt_index)) != -1) {
         switch (opt) {
         case 'p':
             dport_low = get_low_port(optarg);
@@ -123,9 +126,16 @@ int main(int argc, char *argv[])
         case 'R':
             rst_flag = 1;
             break;
+        case 't':
+            time = atoi(optarg);
+            break;
         default:
             print_usage(argv[0]);
         }
+    }
+
+    if (time != 0) {
+        repeat = -1;
     }
 
     if (optind+2 != argc) {
@@ -168,11 +178,18 @@ int main(int argc, char *argv[])
     
     
     //tcp_forge_xmit(&pkt, NULL, 0);
-    gettimeofday(&last_time, NULL);
 
     unsigned int percent_done;
     unsigned int last_pct_done = 0;
     uint16_t dport;
+    struct timeval end_time, cur_time;
+
+    gettimeofday(&end_time, NULL);
+    end_time.tv_usec += 1000*time;
+    end_time.tv_sec += (end_time.tv_usec / 1000000);
+    end_time.tv_usec %= 1000000;
+
+    gettimeofday(&last_time, NULL);
 
     do {
 
@@ -189,7 +206,10 @@ int main(int argc, char *argv[])
         }
         if (repeat > 0)
             repeat--;
-    } while (repeat != 0);
+        gettimeofday(&cur_time, NULL);
+        
+    } while ((repeat != 0 && cur_time.tv_sec < end_time.tv_sec) || 
+             (cur_time.tv_sec == end_time.tv_sec && cur_time.tv_usec <= end_time.tv_usec));
 
     return 0;    
 }
