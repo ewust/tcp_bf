@@ -82,6 +82,7 @@ void print_usage(char *prog)
     printf("    --repeat (-r) : number of times to repeat. 0 for inifinite\n");
     printf("    --time (-t)   : time (in milliseconds) to run for. Overrides -r.\n");
     printf("    --reset (-R)  : if set, will send RST packets instead of SYN.\n");
+    printf("    --both (-b)   : if set, will alternately send RST and SYN packets.\n");
     printf("\n");
 }
 
@@ -97,6 +98,7 @@ int main(int argc, char *argv[])
         {"delay", 1, 0, 'd'},
         {"repeat", 1, 0, 'r'},
         {"reset", 0, 0, 'R'},
+        {"both", 0, 0, 'b'},
         {"time", 1, 0, 't'},
         {0, 0, 0, 0}
     };
@@ -108,8 +110,9 @@ int main(int argc, char *argv[])
     int repeat = 1;
     int rst_flag = 0;
     int time = 0;
+    int both_flag = 0;
 
-    while ((opt = getopt_long(argc, argv, "p:d:r:Rt:", long_opts, &opt_index)) != -1) {
+    while ((opt = getopt_long(argc, argv, "p:d:r:Rbt:", long_opts, &opt_index)) != -1) {
         switch (opt) {
         case 'p':
             dport_low = get_low_port(optarg);
@@ -126,6 +129,9 @@ int main(int argc, char *argv[])
         case 'R':
             rst_flag = 1;
             break;
+        case 'b':
+            both_flag = 1;
+            break;
         case 't':
             time = atoi(optarg);
             break;
@@ -136,6 +142,10 @@ int main(int argc, char *argv[])
 
     if (time != 0) {
         repeat = -1;
+    }
+
+    if (both_flag != 0) {
+        rst_flag = 0;
     }
 
     if (optind+2 != argc) {
@@ -182,7 +192,7 @@ int main(int argc, char *argv[])
     unsigned int percent_done;
     unsigned int last_pct_done = 0;
     uint16_t dport;
-    struct timeval end_time, cur_time;
+    struct timeval end_time;
 
     gettimeofday(&end_time, NULL);
     end_time.tv_usec += 1000*time;
@@ -203,13 +213,31 @@ int main(int argc, char *argv[])
                 fprintf(stderr, "noo\n");
                 return -1;
             }
+            
+            if (both_flag && pkt.flags == TH_SYN) {
+                pkt.flags = TH_RST;
+                pkt.seq++;
+            } else if (both_flag && pkt.flags == TH_RST) {
+                pkt.flags = TH_SYN;
+                pkt.seq--;
+                // Don't rerun, move on
+            } 
         }
+
         if (repeat > 0)
             repeat--;
-        gettimeofday(&cur_time, NULL);
-        
-    } while ((repeat != 0 && cur_time.tv_sec < end_time.tv_sec) || 
-             (cur_time.tv_sec == end_time.tv_sec && cur_time.tv_usec <= end_time.tv_usec));
+
+        if (repeat == 0)
+            break;
+        if (time != 0) {
+            struct timeval cur_time;
+            gettimeofday(&cur_time, NULL);
+            if ((cur_time.tv_sec > end_time.tv_sec) ||
+             (cur_time.tv_sec == end_time.tv_sec && cur_time.tv_usec > end_time.tv_usec)) {
+                break;
+            }
+        } 
+    } while (1);
 
     return 0;    
 }
