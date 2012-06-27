@@ -1,20 +1,52 @@
 <html>
 <head>
 <script type="text/javascript">
-    function meh() { console.log('It loaded!'); setTimeout(doagain, 1000);};
+
+
+    var sctimeout_id;
+
+    function scriptConnectTimeout() {
+        console.log('Won the race');
+        setTimeout(doagain, 30000);
+    }
+
+    function getTime()
+    {
+        var d = new Date();
+        return d.getTime() / 1000.0;
+    }
 
 
     function doagain() {
+        console.log('doin again');
         f = document.getElementById('foo');
-        //f.addEventListener("load", meh, false);
-        f.src = 'http://s-static.ak.fbcdn.net/rsrc.php/v2/yv/r/aWMatkshsiW.png?' + Math.random();
-    }
-        
-    function init() {
-        f = document.getElementById('foo');
+        f.parentNode.removeChild(f);
+
+        f = document.createElement('script');
+        f.id = 'foo'; 
         f.addEventListener("load", meh, false);
-        //f.src = 'http://hobocomp.com/drop';
-        f.src = 'http://s-static.ak.fbcdn.net/rsrc.php/v2/yv/r/aWMatkshsiW.png?' + Math.random();
+        //f.src = 'http://s-static.ak.fbcdn.net/rsrc.php/v2/yv/r/aWMatkshsiW.png?' + Math.random();
+        //f.src = 'http://facebook.com';
+        f.src = 'http://' + unique + '-' + count + '.hobocomp.com/?' + Math.random();
+        document.getElementById('container').appendChild(f);
+
+        sctimeout_id = setTimeout(scriptConnectTimeout, 15000);
+    }
+
+    function meh()
+    {
+        cancelTimeout(sctimeout_id);
+        console.log('Lost the race');
+        setTimeout(doagain, 30000);
+    }
+    
+    var unique;
+    var count;
+    function init() {
+        unique = Math.round(Math.random()*100000);
+        count = 0;
+
+        doagain(); 
     }
 
     window.addEventListener("load", init, false);
@@ -24,6 +56,8 @@
 <body onload>
 <h1>Hi.</h1>
 
-<img id="foo"/>
+<div id="container">
+<script id="foo"></script>
+</div>
 </body>
 </html>
