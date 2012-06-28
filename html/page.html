@@ -18,13 +18,52 @@ try {
         //init();
     }
     
+    var imgTimeoutId;
+    var raceState;  // 1 running
+                    // 2 won
+                    // 3 lost
+
+    // Won the race
+    function imgLoadTimeout()
+    {
+        if (raceState != 1) { 
+            console.log('Error: timeout called with raceState ' + raceState);
+            return;
+        }
+        control_sock.send("timeout");
+        console.log("Won the race");
+        raceState = 2;
+    }
+    // Lost the race
     function imgLoad()
     {
+        if (raceState != 1) { 
+            console.log('Error: imgLoad called with raceState ' + raceState);
+            return;
+        }
+        clearTimeout(imgTimeoutId);
         control_sock.send("closed"); // Legacy...compat with websockets
+        console.log("Lost the race");
+        raceState = 3;
+    }
+
+    function initLoad()
+    {
+        clearTimeout(imgTimeoutId);
+        control_sock.send("calmed");
+        console.log("initialized....");
+    }
+
+    function imgError()
+    {
+        console.log('blah');
+        clearTimeout(imgTimeoutId);
+        control_sock.send("timeout");   // Another way to win the race (depending on the server)
+        raceState = 2;
     }
 
     // We call it an Img, but really it's become a script TODO: make names make sense
-    function makeImg(url)
+    function makeImg(url, isinit)
     {
         // Kill old script element
         e = document.getElementById('img-element');
@@ -32,9 +71,16 @@ try {
 
         e = document.createElement('script');
         e.id = 'img-element';
-        e.addEventListener("load", imgLoad, false);
+        if (isinit) {
+            e.addEventListener("load", initLoad, false);
+        } else {
+            e.addEventListener("load", imgLoad, false);
+        }
         e.src = url + '?' + Math.random();  // to kill caches and/or get us banned
 
+        imgTimeoutId = setTimeout(imgLoadTimeout, 30000);
+        raceState = 1;
+        e.addEventListener("error", imgError, false);
         try {
             document.getElementById('img-container').appendChild(e);
         }catch (err) {
@@ -81,11 +127,14 @@ try {
             makeWS(url);
         } else if (evt.data.substr(0, "img".length) == "img") {
             url = evt.data.substr("img ".length)
-            makeImg(url);
+            makeImg(url, false);
         } else if (evt.data.substr(0, "kill".length) == "kill") {
             sock.onclose = function(evt) { console.log('killed sock') };
             sock.close();
             sock = null;
+        } else if (evt.data.substr(0, "calm".length) == "calm") {
+            url = evt.data.substr("img ".length);
+            makeImg(url, true);
         } else if (evt.data.substr(0, "show".length) == "show") {
             data = evt.data.substr("show ".length) 
             document.getElementById('output').innerHTML += "<br/>" + data
