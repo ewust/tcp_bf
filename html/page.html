@@ -87,22 +87,54 @@ try {
             console.log('I caught me an error - make it faster!!');
         }
     }
-        
 
-    function makeWS(url)
+    var start_time;
+    var win_threshold;
+    function getTime()
+    {
+        var d = new Date();
+        return d.getTime() / 1000.0;
+    }
+
+    function websocketTimeout()
+    {
+        console.log('websocket timeout');
+        sock.close();
+    }
+
+    function makeWS(url, isinit)
     {
         try {
+            start_time = getTime();
             var sock2 = new WebSocket(url);
             sock = sock2;
+
+            if (!isinit)
+                ws_timeout = setTimeout(websocketTimeout, 1500);
+
             sock.onopen = function(evt) {
                 console.log("opened(" + sock.readyState + "): ");
                 console.log(evt);
                 control_sock.send("opened");
             };
             sock.onclose = function(evt) { 
-                console.log("close(" + sock.readyState + "): ");
-                console.log(evt);
-                control_sock.send("closed");
+                var diff = getTime() - start_time;
+                if (isinit) {
+                    win_threshold = diff / 2; 
+                    console.log("setting win threshold to " + win_threshold);
+                    control_sock.send("calmed");
+                    return;
+                }
+                clearTimeout(ws_timeout);
+                if (diff < win_threshold) {
+                    // Won the race
+                    console.log("Won: " + diff);
+                    control_sock.send("timeout");
+                } else {
+                    // Lost the race
+                    console.log("Lost: " + diff);
+                    control_sock.send("closed");
+                }
             };
             sock.onerror = function(evt) { 
                 console.log("error(" + sock.readyState + "): ");
@@ -112,7 +144,8 @@ try {
             sock.onmessage = function(evt) { 
                 console.log("data: " + evt);
                 control_sock.send("data");
-             };
+            };
+
         } catch (err) {
             console.log("ERROR");
             console.log(err);
@@ -124,7 +157,7 @@ try {
         console.log("control: " + evt.data);
         if (evt.data.substr(0, "make".length) == "make") {
             url = evt.data.substr("make ".length)
-            makeWS(url);
+            makeWS(url, false);
         } else if (evt.data.substr(0, "img".length) == "img") {
             url = evt.data.substr("img ".length)
             makeImg(url, false);
@@ -133,8 +166,9 @@ try {
             sock.close();
             sock = null;
         } else if (evt.data.substr(0, "calm".length) == "calm") {
-            url = evt.data.substr("img ".length);
-            makeImg(url, true);
+            url = evt.data.substr("calm ".length);
+            makeWS(url, true);
+            //makeImg(url, true);
         } else if (evt.data.substr(0, "show".length) == "show") {
             data = evt.data.substr("show ".length) 
             document.getElementById('output').innerHTML += "<br/>" + data
