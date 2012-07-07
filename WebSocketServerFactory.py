@@ -216,10 +216,11 @@ class ControlWebSocket(Protocol):
         
 
     def dataReceived(self, data):
-        #log.msg("Got %r" % (data,))
+        # Received data from the control websocket
+        # either we won/lost the race ("timeout"/"closed"), 
+        # or the browser is done initializing ("calmed")
         if data == 'closed' or data == 'timeout':
 
-            adjust_ok = True
             if data == 'closed':
                 we_won = False
                 print 'Lost the race'
@@ -227,44 +228,46 @@ class ControlWebSocket(Protocol):
                 we_won = True
                 print 'Won the race'
 
+            # Kill spewer, whatever you do! (This is NOT the kind
+            # of process you want to leave running if you can help it...)
             if self.spewer_pid != None:
                 os.kill(self.spewer_pid, signal.SIGKILL)
                 self.spewer_pid = None
 
-            self.votes.append(we_won)
+            if self.bucket_search:
 
-            if len(self.votes) >= 3:
-                # count the votes, and use this result to move on
-                if True in self.votes:
-                    # we won at least one race. Assume our 
-                    # false-positive rate (winning a race we shouldn't have)
-                    # is much less than our false-negative rate (losing when
-                    # we should have won, e.g. dropped packet etc)
-                    we_won = True
-                else:
-                    we_won = False
-                self.votes = []
+                self.votes.append(we_won)
 
-                if (we_won):
-                    if self.bucket_search:
+                if len(self.votes) >= 3:
+                    # count the votes, and use this result to move on
+                    if True in self.votes:
+                        # we won at least one race. Assume our 
+                        # false-positive rate (winning a race we shouldn't have)
+                        # is much less than our false-negative rate (losing when
+                        # we should have won, e.g. dropped packet etc)
+                        we_won = True
+                    else:
+                        we_won = False
+                    self.votes = []
+
+                    if (we_won):
                         # now we will use binary search
                         self.bucket_search = False
-                        adjust_ok = False    # don't adjust these values:
     
                         (self.min_port, self.max_port) = self.getBucketPortRange() 
                         self.mid_port = (self.min_port + self.max_port) / 2
+                    else:
+                        # we lost, so we're
+                        # still doing a linear search over buckets
+                        self.bucket += 1
+                        if (self.bucket == NUM_BUCKETS):
+                            print 'Ah, well that is the game :('
+                            reactor.stop()
+                            return
 
-
-                if self.bucket_search == True:
-                    # still doing a linear search over buckets
-                    self.bucket += 1
-                    if (self.bucket == NUM_BUCKETS):
-                        print 'Ah, well that is the game :('
-                        reactor.stop()
-                        return
-
-                elif adjust_ok:
-                    self.adjustBucket(we_won)
+            else:
+                # Doing binary search
+                self.adjustBucket(we_won)
 
             # Fire again
             if (self.fire_time != None):
