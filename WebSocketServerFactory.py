@@ -109,7 +109,7 @@ class ControlWebSocket(Protocol):
         otherwise, it was in self.mid_port - self.max_port
         """
 
-        self.calls += 1
+        #self.calls += 1
         if (self.calls > 25):
             print 'yikes, 25 calls...quitting'
             reactor.stop()
@@ -226,41 +226,59 @@ class ControlWebSocket(Protocol):
             else:
                 we_won = True
                 print 'Won the race'
-                if self.bucket_search:
-                    # now we will use binary search
-                    self.bucket_search = False
-                    adjust_ok = False    # don't adjust these values:
-    
-                    (self.min_port, self.max_port) = self.getBucketPortRange() 
-                    self.mid_port = (self.min_port + self.max_port) / 2
 
             if self.spewer_pid != None:
                 os.kill(self.spewer_pid, signal.SIGKILL)
                 self.spewer_pid = None
 
-            if self.bucket_search == True:
-                # still doing a linear search over buckets
-                self.bucket += 1
-                if (self.bucket == NUM_BUCKETS):
-                    print 'Ah, well that is the game :('
-                    reactor.stop()
-                    return
-            elif adjust_ok:
-                self.adjustBucket(we_won)                
+            self.votes.append(we_won)
 
+            if len(self.votes) >= 3:
+                # count the votes, and use this result to move on
+                if True in self.votes:
+                    # we won at least one race. Assume our 
+                    # false-positive rate (winning a race we shouldn't have)
+                    # is much less than our false-negative rate (losing when
+                    # we should have won, e.g. dropped packet etc)
+                    we_won = True
+                else:
+                    we_won = False
+                self.votes = []
+
+                if (we_won):
+                    if self.bucket_search:
+                        # now we will use binary search
+                        self.bucket_search = False
+                        adjust_ok = False    # don't adjust these values:
+    
+                        (self.min_port, self.max_port) = self.getBucketPortRange() 
+                        self.mid_port = (self.min_port + self.max_port) / 2
+
+
+                if self.bucket_search == True:
+                    # still doing a linear search over buckets
+                    self.bucket += 1
+                    if (self.bucket == NUM_BUCKETS):
+                        print 'Ah, well that is the game :('
+                        reactor.stop()
+                        return
+
+                elif adjust_ok:
+                    self.adjustBucket(we_won)
+
+            # Fire again
             if (self.fire_time != None):
                 print 'diff: %f' % (time.time() - self.fire_time)
-            
-            #if self.websocketTimeoutCb != None:
-                # We have a timeout callback outstanding we need to cancel
-                #self.websocketTimeoutCb.cancel()
-
+                
             reactor.callLater(NEW_CONNECTION_PERIOD, self.fireAgain)
 
         elif data == 'calmed':
             # The browser has initialized itself and is ready to begin bucket search
             if (self.fire_time != None):
                 print 'diff: %f' % (time.time() - self.fire_time)
+            self.votes = []  # We will append to this a set of win/loss (True/False)
+                             # until we get above VOTE_THRESHOLD, then move on to the
+                             # next bucket, to increase reliability.
             reactor.callLater(NEW_CONNECTION_PERIOD, self.fireAgain)
 
     def connectionMade(self):
