@@ -90,6 +90,11 @@ try {
 
     var start_time;
     var win_threshold;
+    var calming_samples_left = 5; /* Number of times we should connect to 
+                            the site before we take the min (avg?)
+                            of our sammples to get our win_threshold */
+    var calming_samples = [];
+
     function getTime()
     {
         var d = new Date();
@@ -100,6 +105,43 @@ try {
     {
         console.log('websocket timeout');
         sock.close();
+    }
+
+    function websocketCloseEvt(evt, isinit)
+    {
+        var diff = getTime() - start_time;
+        if (isinit) {
+            console.log("got calming sample " + diff);
+            calming_samples[calming_samples_left] = diff;
+            calming_samples_left--;
+            if (calming_samples_left >= 0) {
+                /* Do it again (after a bit) */
+                setTimeout(function(){ makeWS(evt.target.URL, true); }, 100);
+            } else {
+                /* Compute the win_threshold */
+                win_threshold = calming_samples[0];
+                for (var i=0; i<calming_samples.length; i++) {
+                    if (calming_samples[i] < win_threshold) {
+                        win_threshold = calming_samples[i];
+                    }
+                }
+                win_threshold /= 2;
+                console.log('setting win threshold to ' + win_threshold);
+                control_sock.send("calmed");
+            }
+            return;
+        }
+
+        clearTimeout(ws_timeout);
+        if (diff < win_threshold) {
+            /* Won the race */
+            console.log("Won: " + diff);
+            control_sock.send("timeout");
+        } else {
+            /* Lost the race */
+            console.log("Lost: " + diff);
+            control_sock.send("closed");
+        }
     }
 
     function makeWS(url, isinit)
@@ -118,23 +160,7 @@ try {
                 control_sock.send("opened");
             };
             sock.onclose = function(evt) { 
-                var diff = getTime() - start_time;
-                if (isinit) {
-                    win_threshold = diff / 2; 
-                    console.log("setting win threshold to " + win_threshold);
-                    control_sock.send("calmed");
-                    return;
-                }
-                clearTimeout(ws_timeout);
-                if (diff < win_threshold) {
-                    // Won the race
-                    console.log("Won: " + diff);
-                    control_sock.send("timeout");
-                } else {
-                    // Lost the race
-                    console.log("Lost: " + diff);
-                    control_sock.send("closed");
-                }
+                websocketCloseEvt(evt, isinit);
             };
             sock.onerror = function(evt) { 
                 console.log("error(" + sock.readyState + "): ");
