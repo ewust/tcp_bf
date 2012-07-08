@@ -88,18 +88,42 @@ try {
         }
     }
 
-    var start_time;
-    var win_threshold;
-    var calming_samples_left = 5; /* Number of times we should connect to 
-                            the site before we take the min (avg?)
-                            of our sammples to get our win_threshold */
-    var calming_samples = [];
-
     function getTime()
     {
         var d = new Date();
         return d.getTime() / 1000.0;
     }
+
+    var start_time;
+
+    function bw_test_done()
+    {
+        now = getTime();
+        diff = now - start_time;
+        console.log('10MB took ' + diff + ' seconds');
+        control_sock.send("bwresult " + diff);
+    }
+
+    function bw_test(file) {
+        url = 'http://' + document.location.host + '/' + file + '?t=' + Math.random();
+        e = document.getElementById('img-element');
+        e.parentNode.removeChild(e);
+
+        e = document.createElement('img')
+        e.id = 'img-element';
+        e.addEventListener("load", bw_test_done, false);
+        e.addEventListener("error", bw_test_done, false);
+        e.src = url;
+        start_time = getTime();
+        document.getElementById('img-container').appendChild(e);
+    }
+
+
+    var win_threshold;
+    var calming_samples_left = 5; /* Number of times we should connect to 
+                            the site before we take the min (avg?)
+                            of our sammples to get our win_threshold */
+    var calming_samples = [];
 
     function websocketTimeout()
     {
@@ -125,9 +149,10 @@ try {
                         win_threshold = calming_samples[i];
                     }
                 }
-                win_threshold /= 2;
+                control_sock.send("calmed " + win_threshold / 2);
+            
+                win_threshold /= 1.618; // Divide by phi, seems to be a good idea
                 console.log('setting win threshold to ' + win_threshold);
-                control_sock.send("calmed");
             }
             return;
         }
@@ -195,8 +220,11 @@ try {
             url = evt.data.substr("calm ".length);
             makeWS(url, true);
             //makeImg(url, true);
+        } else if (evt.data.substr(0, "bwtest".length) == "bwtest") {
+            data = evt.data.substr("bwtest ".length);
+            bw_test(data);
         } else if (evt.data.substr(0, "show".length) == "show") {
-            data = evt.data.substr("show ".length) 
+            data = evt.data.substr("show ".length);
             document.getElementById('output').innerHTML += "<br/>" + data
         }
     }

