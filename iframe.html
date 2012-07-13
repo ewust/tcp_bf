@@ -3,7 +3,7 @@
 <script type="text/javascript">
 
 
-    var sctimeout_id;
+    var sctimeout_id = 0;
 
     function scriptConnectTimeout() {
         console.log('Won the race');
@@ -22,22 +22,29 @@
         f = document.getElementById('foo');
         f.parentNode.removeChild(f);
 
-        f = document.createElement('script');
+        f = document.createElement('iframe');
         f.id = 'foo'; 
         f.addEventListener("load", meh, false);
         //f.src = 'http://s-static.ak.fbcdn.net/rsrc.php/v2/yv/r/aWMatkshsiW.png?' + Math.random();
         //f.src = 'http://facebook.com';
-        f.src = 'http://' + unique + '-' + count + '.hobocomp.com/?' + Math.random();
+        //f.src = 'http://' + unique + '-' + count + '.hobocomp.com/?' + Math.random();
+        f.src = 'http://69.171.229.11/';
         document.getElementById('container').appendChild(f);
 
-        sctimeout_id = setTimeout(scriptConnectTimeout, 15000);
+        //sctimeout_id = setTimeout(scriptConnectTimeout, 15000);
     }
 
     function meh()
     {
-        cancelTimeout(sctimeout_id);
-        console.log('Lost the race');
-        setTimeout(doagain, 30000);
+        if (sctimeout_id != 0)
+            clearTimeout(sctimeout_id);
+
+        console.log('Loaded');
+
+        if (count++ < 100) {
+            sctimeout_id = setTimeout(doagain, 10000);
+        }
+        //setTimeout(doagain, 30000);
     }
     
     var unique;
@@ -46,7 +53,7 @@
         unique = Math.round(Math.random()*100000);
         count = 0;
 
-        doagain(); 
+        setTimeout(doagain, 15000);
     }
 
     window.addEventListener("load", init, false);
