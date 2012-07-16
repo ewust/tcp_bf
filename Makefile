@@ -9,3 +9,6 @@ server: server.c tcp_spoof.c
 
 syn_spew: syn_spew.c tcp_spoof.c
 	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
+
+http_spew: http_spew.c tcp_spoof.c
+	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
