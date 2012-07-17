@@ -362,7 +362,7 @@ class ControlWebSocket(Protocol):
             port_guesses = float(pps * self.RTT) / 1000.0   # number of ports we can guess per RTT
         
 
-            self.NUM_BUCKETS = ((HIGH_PORT - LOW_PORT) / port_guesses) + 1
+            self.NUM_BUCKETS = int((HIGH_PORT - LOW_PORT) / port_guesses + 1)
             self.PORT_BUCKET_SIZE = (HIGH_PORT - LOW_PORT) / self.NUM_BUCKETS
             print 'moving to %d buckets' % self.NUM_BUCKETS
             
