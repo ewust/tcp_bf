@@ -151,7 +151,7 @@ try {
                 }
                 control_sock.send("calmed " + win_threshold / 2);
             
-                win_threshold /= 1.618; // Divide by phi, seems to be a good idea
+                win_threshold /= 1.414; // Divide by sqrt(2), seems to be a good idea
                 console.log('setting win threshold to ' + win_threshold);
             }
             return;
