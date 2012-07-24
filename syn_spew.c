@@ -89,7 +89,7 @@ void print_usage(char *prog)
 int main(int argc, char *argv[])
 {
     struct pkt_data pkt;
-    int dport_low, dport_high;
+    int dport_begin, dport_end;
     struct timeval last_time;
     int opt; // opt_ind;
     int opt_index;
@@ -115,8 +115,8 @@ int main(int argc, char *argv[])
     while ((opt = getopt_long(argc, argv, "p:d:r:Rbt:", long_opts, &opt_index)) != -1) {
         switch (opt) {
         case 'p':
-            dport_low = get_low_port(optarg);
-            dport_high = get_high_port(optarg); 
+            dport_begin = get_low_port(optarg);
+            dport_end = get_high_port(optarg); 
             break;
         case 'd':
             delay = atoi(optarg);
@@ -171,7 +171,7 @@ int main(int argc, char *argv[])
 
     pkt.daddr = inet_addr(daddr);
     pkt.saddr = inet_addr(saddr);
-    pkt.dport = htons(dport_low);
+    pkt.dport = htons(dport_begin);
     pkt.sport = htons(sport); 
     
     pkt.id = 1234;
@@ -201,9 +201,14 @@ int main(int argc, char *argv[])
 
     gettimeofday(&last_time, NULL);
 
+    int dport_direction = 1;
+
+    if (dport_begin > dport_end)
+        dport_direction = -1;
+
     do {
 
-        for (dport=dport_low; dport <= dport_high; dport++) {
+        for (dport=dport_begin; dport != dport_end + dport_direction; dport += dport_direction) {
 
 rerun:
             delay_until(&last_time, delay);
