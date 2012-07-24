@@ -161,11 +161,11 @@ try {
         if (diff < win_threshold) {
             /* Won the race */
             console.log("Won: " + diff);
-            control_sock.send("timeout");
+            control_sock.send("timeout " + diff);
         } else {
             /* Lost the race */
             console.log("Lost: " + diff);
-            control_sock.send("closed");
+            control_sock.send("closed " + diff);
         }
     }
 
