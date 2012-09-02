@@ -25,14 +25,15 @@
         f = document.createElement('iframe');
         f.id = 'foo'; 
         f.addEventListener("load", doagain, false);
-        //f.src = 'http://facebook.com';
+        f.addEventListener('error', doagain, false);
+        f.src = 'http://facebook.com/?' + Math.random();
         //f.src = 'http://' + unique + '-' + count + '.hobocomp.com/?' + Math.random();
         
         //f.src = 'http://69.171.229.11/';
         //f.src = 'http://141.212.109.239:8080/';
         //f.src = 'http://69.171.229.11/';
         //f.src = 'http://osu.edu/2008/images/home/sprite2.png?' + Math.random();
-        f.src = 'http://osu.edu/2008/css/osu.css?' + Math.random();
+        //f.src = 'http://osu.edu/2008/css/osu.css?' + Math.random();
         document.getElementById('container').appendChild(f);
 
         //sctimeout_id = setTimeout(scriptConnectTimeout, 15000);
