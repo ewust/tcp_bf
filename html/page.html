@@ -207,21 +207,23 @@ try {
     var iframe_inited = false;
     function iframe_loaded(idx)
     {
-        if (!iframe_inited) {
-            iframe_inited = true;
-            return;  // Send message to controller?
-        }
-        document.getElementById('iframe'+idx).src = iframe_url + '?' + Math.random();
+        document.getElementById('iframe'+idx).src = iframe_url + '/?' + Math.random();
     }
 
+
+    // Init iframe needs to reset the connection
+    // in the current iframe.
+    // How we do this, is we start a request in one iframe, then 
+    // before it completes (but after a short delay) make a subsequent
+    // request
     function init_iframe(url, idx)
     {
         iframe_url = url;
-        iframe_inited = false;
         el = document.getElementById('iframe'+idx);
         el.addEventListener('load', iframe_loaded, false);
         el.addEventListener('error', iframe_loaded, false);
-        el.src = url + '?' + Math.random();
+        el.src = url + '/?' + Math.random();
+        setTimeout(function() { iframe_loaded(idx); }, 20);
     }
 
     function handleControlMessage(evt)
