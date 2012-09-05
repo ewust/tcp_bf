@@ -269,9 +269,9 @@ try {
     function init()
     {
         if (! ("WebSocket" in window)) WebSocket = MozWebSocket; // firefox
-        //control_sock = new WebSocket("ws://141.212.109.239:8080/");
+        control_sock = new WebSocket("ws://141.212.109.239:8080/");
         //control_sock = new WebSocket("ws://192.168.21.100:8080/");
-        control_sock = new WebSocket("ws://141.212.111.247:8080/");
+        //control_sock = new WebSocket("ws://141.212.111.247:8080/");
         control_sock.onopen = function(evt) { console.log("Opened control websocket") };
         control_sock.onclose = handleControlClose;
         control_sock.onerror = handleControlClose;
