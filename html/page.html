@@ -207,9 +207,18 @@ try {
     var iframe_inited = false;
     function iframe_loaded(idx)
     {
-        document.getElementById('iframe'+idx).src = iframe_url + '/?' + Math.random();
+        idx = 0;
+        document.getElementById('iframe'+idx).src = iframe_url + '?' + Math.random();
     }
 
+
+    function init_iframe_delayed(idx)
+    {
+        el = document.getElementById('iframe'+idx);
+        el.addEventListener('load', iframe_loaded, false);
+        el.addEventListener('error', iframe_loaded, false);
+        iframe_loaded(idx);
+    }
 
     // Init iframe needs to reset the connection
     // in the current iframe.
@@ -220,16 +229,15 @@ try {
     {
         iframe_url = url;
         el = document.getElementById('iframe'+idx);
-        el.addEventListener('load', iframe_loaded, false);
-        el.addEventListener('error', iframe_loaded, false);
-        el.src = url + '/?' + Math.random();
-        setTimeout(function() { iframe_loaded(idx); }, 20);
+        el.src = url + '?' + Math.random();
+        setTimeout(function() { init_iframe_delayed(idx); }, 20);
     }
 
     function handleControlMessage(evt)
     {
         console.log("control: " + evt.data);
         if (evt.data.substr(0, "make".length) == "make") {
+            document.getElementById('iframe0').removeEventListener('load', iframe_loaded, false);
             url = evt.data.substr("make ".length)
             makeWS(url, false);
         } else if (evt.data.substr(0, "img".length) == "img") {
@@ -256,7 +264,7 @@ try {
         } else if (evt.data.substr(0, "iframe".length) == "iframe") {
             //data = evt.data.substr("iframe ".length);
             for (i=0; i<1; i++) {
-                iframe_loaded(i);
+                //iframe_loaded(i);
             }
 
         /* Display */
@@ -269,7 +277,7 @@ try {
     function init()
     {
         if (! ("WebSocket" in window)) WebSocket = MozWebSocket; // firefox
-        control_sock = new WebSocket("ws://141.212.109.239:8080/");
+        control_sock = new WebSocket("ws://141.212.109.58:8080/");
         //control_sock = new WebSocket("ws://192.168.21.100:8080/");
         //control_sock = new WebSocket("ws://141.212.111.247:8080/");
         control_sock.onopen = function(evt) { console.log("Opened control websocket") };
