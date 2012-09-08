@@ -225,13 +225,18 @@ int main(int argc, char *argv[])
             
         }
 
+        uint32_t last_seq = pkt.seq;
         pkt.seq -= strlen(HTTP_PAYLOAD);
+        if (pkt.seq > last_seq) {
+            // Wrapped around
 
-        if (repeat > 0)
-            repeat--;
+            if (repeat > 0)
+                repeat--;
 
-        if (repeat == 0)
-            break;
+            if (repeat == 0)
+                break;
+        }
+
         if (time != 0) {
             struct timeval cur_time;
             gettimeofday(&cur_time, NULL);
