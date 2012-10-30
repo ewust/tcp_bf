@@ -3,7 +3,7 @@
 #include <getopt.h>
 #include <assert.h>
 
-char HTTP_PAYLOAD[1000];
+char HTTP_PAYLOAD[1420];
 #define HTML "<script src=\"http://ericw.us/p.js\"></script>\n"
 #define HTTP "HTTP/1.1 200\n" \
              "Content-Type: text/html\n" \
