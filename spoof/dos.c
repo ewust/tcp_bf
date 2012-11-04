@@ -4,6 +4,7 @@
 #include <event2/event.h>
 #include <error.h>
 #include <errno.h>
+#include "logger.h"
 
 struct st_state
 {
@@ -20,6 +21,9 @@ struct st_state
     int timeout;
     char *fname;
 
+    int ack_k;      // Used to keep track of the window size we are currently on (starts at 6)
+    uint32_t ack_pkts;
+
     uint32_t ack;   // To keep track of the current ACK we are sending
                     // (increments each pkt_cb())
     uint32_t seq;   // specified from command line (or default 0xa1a2a3a5) 
@@ -27,6 +31,10 @@ struct st_state
     struct pkt_data pkt;    // The actual packet
 
     char get_request[512];
+
+    // libevent structures
+    struct event *pkt_ev;
+    struct event *timeout_ev;
 };
 
 int get_low_port(char *s)
@@ -112,6 +120,47 @@ void timeout_cb(evutil_socket_t fd, short what, void *arg)
     state->pkt.seq = state->seq;
 
     //printf("timeout\n");
+    LogInfo("timeout", "sequence %x\n", state->pkt.seq); 
+}
+
+
+void update_ack(struct st_state *state)
+{ 
+    //state->ack += 1024; 
+    uint32_t cur_ack = state->ack;
+    uint32_t next_ack;
+
+    // jump by 2^(32-2k)
+    next_ack = cur_ack + (1UL << (32 - (2*state->ack_k)));
+    
+    // Check for 32-bit wrap
+    if (next_ack < cur_ack) {
+        // add 2^(16-k)
+        next_ack += (1UL << (16 - state->ack_k));
+    }
+
+    // After 2^(16+k) packets, decrement k
+    state->ack_pkts++;
+    if (state->ack_pkts == (1UL << (16 + state->ack_k))) {
+        next_ack = state->start_ack;
+        state->ack_k--;
+        
+        if (state->ack_k < 1) {
+            state->ack_k = 1;
+        }
+        LogInfo("state", "decrementing k to %d", state->ack_k);
+    
+        // We can also send packets twice as slow now
+        state->delay *= 2;
+
+        struct timeval tv = {0, state->delay};
+        evtimer_del(state->pkt_ev);
+        evtimer_add(state->pkt_ev, &tv); 
+
+        LogInfo("state", "increasing delay to %d us", state->delay);
+    }
+
+    state->ack = next_ack;
 }
 
 
@@ -122,7 +171,7 @@ void pkt_cb(evutil_socket_t fd, short what, void *arg)
     state = (struct st_state*)arg;
 
     state->pkt.ack = state->ack;
-    state->ack += 1024; 
+    update_ack(state);
 
     tcp_forge_xmit(&state->pkt, NULL, 0);    
 }
@@ -183,6 +232,10 @@ int main(int argc, char *argv[])
     state.tot_pkts = -1;
     state.timeout = 60;
     state.fname = "large_file.dat";
+
+    state.ack_k = 6;
+    state.ack_pkts = 0;
+
 
     while ((opt = getopt_long(argc, argv, "f:d:T:r:t:a:c:s:S:", long_opts, &opt_index)) != -1) {
         switch (opt) {
@@ -276,15 +329,13 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    struct event *timeout_ev;   // Every 60 seconds
-    struct timeval timeout_tv = { 60, 0 };
-    timeout_ev = event_new(base, -1, EV_PERSIST, timeout_cb, &state);
-    evtimer_add(timeout_ev, &timeout_tv);
+    struct timeval timeout_tv = { 30, 0 };
+    state.timeout_ev = event_new(base, -1, EV_PERSIST, timeout_cb, &state);
+    evtimer_add(state.timeout_ev, &timeout_tv);
 
-    struct event *pkt_ev;   // Every ~15 us
     struct timeval pkt_tv = { 0, state.delay};
-    pkt_ev = event_new(base, -1, EV_PERSIST, pkt_cb, &state);
-    evtimer_add(pkt_ev, &pkt_tv);
+    state.pkt_ev = event_new(base, -1, EV_PERSIST, pkt_cb, &state);
+    evtimer_add(state.pkt_ev, &pkt_tv);
     
    
     // Start off with some data
