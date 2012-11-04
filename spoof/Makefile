@@ -7,7 +7,7 @@ all: conn_spoof dos parse-pcap
 conn_spoof: conn_spoof.c ../tcp_spoof.c
 	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
-dos: dos.c ../tcp_spoof.c
+dos: dos.c ../tcp_spoof.c ../logger.c
 	$(CC) $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
 parse-pcap: parse-pcap.c
