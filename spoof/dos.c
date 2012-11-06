@@ -120,7 +120,7 @@ void timeout_cb(evutil_socket_t fd, short what, void *arg)
     state->pkt.seq = state->seq;
 
     //printf("timeout\n");
-    LogInfo("timeout", "sequence %x\n", state->pkt.seq); 
+    LogInfo("timeout", "sequence 0x%08x", state->pkt.seq); 
 }
 
 
@@ -141,7 +141,9 @@ void update_ack(struct st_state *state)
 
     // After 2^(16+k) packets, decrement k
     state->ack_pkts++;
-    if (state->ack_pkts == (1UL << (16 + state->ack_k))) {
+    if (state->ack_pkts == (1UL << (17 + state->ack_k))) {
+        LogInfo("state", "acked %d packets", state->ack_pkts);
+        state->ack_pkts = 0;
         next_ack = state->start_ack;
         state->ack_k--;
         
@@ -158,6 +160,16 @@ void update_ack(struct st_state *state)
         evtimer_add(state->pkt_ev, &tv); 
 
         LogInfo("state", "increasing delay to %d us", state->delay);
+    
+        state->timeout /= 2;
+        if (state->timeout < 2) {
+            state->timeout = 2;
+        }
+        struct timeval tv2 = {state->timeout, 0};
+        evtimer_del(state->timeout_ev);
+        evtimer_add(state->timeout_ev, &tv2);
+
+        LogInfo("state", "decreasing timeout to %d seconds", state->timeout);
     }
 
     state->ack = next_ack;
@@ -223,7 +235,7 @@ int main(int argc, char *argv[])
     int dport;
 
     // defaults
-    state.delay = 15;
+    state.delay = 16;
     state.repeat = 1;
     state.sport = 11111;
     state.seq = 0xa1a2a3a5;
@@ -272,6 +284,7 @@ int main(int argc, char *argv[])
             print_usage(argv[0]);
         }
     }
+
 
     if (state.time != 0) {
         state.repeat = -1;
@@ -329,7 +342,7 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    struct timeval timeout_tv = { 30, 0 };
+    struct timeval timeout_tv = { 15, 0 };
     state.timeout_ev = event_new(base, -1, EV_PERSIST, timeout_cb, &state);
     evtimer_add(state.timeout_ev, &timeout_tv);
 
@@ -337,6 +350,8 @@ int main(int argc, char *argv[])
     state.pkt_ev = event_new(base, -1, EV_PERSIST, pkt_cb, &state);
     evtimer_add(state.pkt_ev, &pkt_tv);
     
+    LogOutputStream(stdout);
+    LogInfo("main", "launching...");
    
     // Start off with some data
     timeout_cb(-1, 0, &state);
