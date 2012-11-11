@@ -21,8 +21,22 @@ struct st_state
     int timeout;
     char *fname;
 
-    int ack_k;      // Used to keep track of the window size we are currently on (starts at 6)
-    uint32_t ack_pkts;
+    // Used for update_ack:
+    uint32_t ack_col;
+    uint32_t ack_row;    
+    uint32_t ack_col_height;
+    uint32_t ack_row_width;
+    uint32_t cur_window;    // Todo: make these unsigned long long's for extended windows
+    uint32_t cur_window_col_sep;    // Because we are trying to shrink from 1024 simultaneous races
+                                    // down to ~4, and our window doesn't double this fast,
+                                    // we do this by keeping our cur_window the same (since
+                                    // we can't send faster than that or some B.S.),
+                                    // and increasing cur_window_col_sep while simultaneously
+                                    // increasing col_height to maintain constant matrix area
+    uint32_t max_window;    
+    int ack_between_round;  // True if we are in a transitional round (e.g. 1->2KB window
+    int first_round;
+    
 
     uint32_t ack;   // To keep track of the current ACK we are sending
                     // (increments each pkt_cb())
@@ -127,51 +141,106 @@ void timeout_cb(evutil_socket_t fd, short what, void *arg)
 void update_ack(struct st_state *state)
 { 
     //state->ack += 1024; 
-    uint32_t cur_ack = state->ack;
     uint32_t next_ack;
+    uint32_t row_add;
 
-    // jump by 2^(32-2k)
-    next_ack = cur_ack + (1UL << (32 - (2*state->ack_k)));
+    // -> + 1MB, 2MB, 3MB, etc... 
+    next_ack = state->ack_col * state->ack_col_height * state->cur_window;
     
-    // Check for 32-bit wrap
-    if (next_ack < cur_ack) {
-        // add 2^(16-k)
-        next_ack += (1UL << (16 - state->ack_k));
+    // |
+    // v + 1KB, 2KB, 3KB, 4KB, etc...
+    row_add = state->ack_row * state->cur_window;
+
+    next_ack += row_add;
+
+    if (state->ack_between_round && ((state->ack_col % 2) == 0)) {
+        // Add a second one if we are in the transition 
+        // between window sizes for every other column.
+        // This allows us to "catch up" with the column to our right
+        // by the end of this round, and the next round, cut the number
+        // of columns in half.
+        next_ack += row_add;
     }
 
-    // After 2^(16+k) packets, decrement k
-    state->ack_pkts++;
-    if (state->ack_pkts == (1UL << (17 + state->ack_k))) {
-        LogInfo("state", "acked %d packets", state->ack_pkts);
-        state->ack_pkts = 0;
-        next_ack = state->start_ack;
-        state->ack_k--;
+    if (state->first_round > 0) {
+        state->first_round--;
+        LogInfo("ack", " (%d, %d)_%d = %d (%d col sep, %d trans)", 
+                state->ack_col, state->ack_row, state->cur_window,
+                next_ack, state->cur_window_col_sep, state->ack_between_round);
+    }
+
+    if (state->ack_col == 0 && state->first_round <= 0 && state->first_round > -4) {
+        state->first_round--;
+        LogInfo("ack", "(%d, %d)_%d = %d (%d col sep, %d trans)", 
+                state->ack_col, state->ack_row, state->cur_window,
+                next_ack, state->cur_window_col_sep, state->ack_between_round);
+    }
         
-        if (state->ack_k < 1) {
-            state->ack_k = 1;
-        }
-        LogInfo("state", "decrementing k to %d", state->ack_k);
+
+    // Advance and check for wrap
+    state->ack_col++;
+    if (state->ack_col == state->ack_row_width) {
+        state->ack_col = 0;
+
+        // Advance the row, check for wrap
+        state->ack_row++;
+        if (state->ack_row == state->ack_col_height) {
+            // End of this round/window size
+            state->ack_row = 0;
+            state->first_round = 4;
+
+            LogInfo("state", "finished window %d%s", state->cur_window, 
+                    state->ack_between_round ? " (transition)" : "");
+
+            if (state->ack_between_round) {
+                // We have transitioned to the next round
+                state->ack_between_round = 0;
+
+                if (state->ack_row_width > 4) {
+                    state->ack_row_width /= 2;
+                    //state->cur_window_col_sep *= 2;
+                    LogInfo("state", "decreasing row width to %d", state->ack_row_width);
+
+                    if (state->cur_window >= state->max_window) {
+                        state->ack_col_height *= 2;
+                    }
+                    LogInfo("state", "col_height: %d window_col_sep %d", state->ack_col_height, 
+                            state->cur_window_col_sep);
+                }
+
+                if (state->cur_window < state->max_window) {
+                    state->cur_window *= 2;
+                    LogInfo("state", "increasing window to %d", state->cur_window);
+
+                    // We can also send packets twice as slow now
+                    state->delay *= 2;
+
+                    struct timeval tv = {0, state->delay};
+                    evtimer_del(state->pkt_ev);
+                    evtimer_add(state->pkt_ev, &tv); 
+                    LogInfo("state", "increasing delay to %d us", state->delay);
     
-        // We can also send packets twice as slow now
-        state->delay *= 2;
+                    if (state->timeout > 1) {
+                        if (state->timeout > 3) {
+                            state->timeout -= 3;
+                        } else {
+                            state->timeout--;
+                        }
+                        struct timeval tv2 = {state->timeout, 0};
+                        evtimer_del(state->timeout_ev);
+                        evtimer_add(state->timeout_ev, &tv2);
 
-        struct timeval tv = {0, state->delay};
-        evtimer_del(state->pkt_ev);
-        evtimer_add(state->pkt_ev, &tv); 
+                        LogInfo("state", "decreasing timeout to %d seconds", state->timeout);
+                    }
+                } 
 
-        LogInfo("state", "increasing delay to %d us", state->delay);
-    
-        state->timeout /= 2;
-        if (state->timeout < 2) {
-            state->timeout = 2;
+            } else {
+                // We are now in a transitional round; don't change sizes yet
+                state->ack_between_round = 1;   
+            } 
         }
-        struct timeval tv2 = {state->timeout, 0};
-        evtimer_del(state->timeout_ev);
-        evtimer_add(state->timeout_ev, &tv2);
-
-        LogInfo("state", "decreasing timeout to %d seconds", state->timeout);
     }
-
+    
     state->ack = next_ack;
 }
 
@@ -242,12 +311,17 @@ int main(int argc, char *argv[])
     state.time = 0;
     state.start_ack = 0;
     state.tot_pkts = -1;
-    state.timeout = 60;
+    state.timeout = 8;
     state.fname = "large_file.dat";
 
-    state.ack_k = 6;
-    state.ack_pkts = 0;
-
+    // Update_ack defaults
+    state.ack_col_height = 2048;
+    state.ack_row_width = 2048;
+    state.cur_window = 1024;
+    state.cur_window_col_sep = state.cur_window;
+    state.max_window = 8192;    // Wish this were larger :/
+    state.ack_between_round = 0;
+    state.first_round = 4;
 
     while ((opt = getopt_long(argc, argv, "f:d:T:r:t:a:c:s:S:", long_opts, &opt_index)) != -1) {
         switch (opt) {
@@ -342,7 +416,7 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    struct timeval timeout_tv = { 15, 0 };
+    struct timeval timeout_tv = { 8, 0 };
     state.timeout_ev = event_new(base, -1, EV_PERSIST, timeout_cb, &state);
     evtimer_add(state.timeout_ev, &timeout_tv);
 
