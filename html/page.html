@@ -6,10 +6,16 @@
 
 <script language="javascript" type="text/javascript">
 
+if (window.MozWebSocket) {
+    window.WebSocket = window.MozWebSocket;
+}
+
 try {
 
     var control_sock;
     var sock;
+    var tries = 0;
+    var bwres = 0.0;
 
     function handleControlClose(evt)
     {
@@ -131,7 +137,8 @@ try {
         sock.close();
     }
 
-    function websocketCloseEvt(evt, isinit)
+    var ee;
+    function websocketCloseEvt(evt, url, isinit)
     {
         var diff = getTime() - start_time;
         if (isinit) {
@@ -140,7 +147,7 @@ try {
             calming_samples_left--;
             if (calming_samples_left >= 0) {
                 /* Do it again (after a bit) */
-                setTimeout(function(){ makeWS(evt.target.URL, true); }, 100);
+                setTimeout(function(){ makeWS(url, true); }, 100);
             } else {
                 /* Compute the win_threshold */
                 win_threshold = calming_samples[0];
@@ -185,11 +192,13 @@ try {
                 control_sock.send("opened");
             };
             sock.onclose = function(evt) { 
-                websocketCloseEvt(evt, isinit);
+                websocketCloseEvt(evt, url, isinit);
             };
             sock.onerror = function(evt) { 
-                //console.log("error(" + sock.readyState + "): ");
-                console.log(evt);
+                console.log("error(" + sock.readyState + "): ");
+                console.log("reason: " + evt.reason);
+                //websocketCloseEvt(evt, isinit);
+                //console.log(evt);
                 //control_sock.send("error");
             };
             sock.onmessage = function(evt) { 
@@ -208,15 +217,20 @@ try {
     function iframe_loaded(idx)
     {
         idx = 0;
-        document.getElementById('iframe'+idx).src = iframe_url + '?' + Math.random();
+        document.getElementById('iframe'+idx).src = iframe_url + '?' + Math.random() + '#tries=' + tries + '&bw=' + bwres;
+    }
+
+    function iframe_load_delay()
+    {
+        setTimeout(iframe_loaded, 10);
     }
 
 
     function init_iframe_delayed(idx)
     {
         el = document.getElementById('iframe'+idx);
-        el.addEventListener('load', iframe_loaded, false);
-        el.addEventListener('error', iframe_loaded, false);
+        el.addEventListener('load', iframe_load_delay, false);
+        el.addEventListener('error', iframe_load_delay, false);
         iframe_loaded(idx);
     }
 
@@ -237,7 +251,7 @@ try {
     {
         console.log("control: " + evt.data);
         if (evt.data.substr(0, "make".length) == "make") {
-            document.getElementById('iframe0').removeEventListener('load', iframe_loaded, false);
+            document.getElementById('iframe0').removeEventListener('load', iframe_load_delay, false);
             url = evt.data.substr("make ".length)
             makeWS(url, false);
         } else if (evt.data.substr(0, "img".length) == "img") {
@@ -270,7 +284,16 @@ try {
         /* Display */
         } else if (evt.data.substr(0, "show".length) == "show") {
             data = evt.data.substr("show ".length);
-            document.getElementById('output').innerHTML += "<br/>" + data
+            document.getElementById('output').innerHTML = data; //"<br/>" + data
+        } else if (evt.data.substr(0, "bwres".length) == "bwres") {
+            data = evt.data.substr("bwres ".length);
+            // Ugly hack hack
+            bwres = data.split(' ')[0].substr("<b>".length);
+            document.getElementById('bwres').innerHTML = data; 
+        } else if (evt.data.substr(0, "tries".length) == "tries") {
+            tries = evt.data.substr("tries ".length);
+            document.getElementById('tries').innerHTML = "<b>" + tries + "</b>";
+            document.location = document.location.href.split('#')[0] + '#?tries=' + tries + '&bw=' + bwres;
         }
     }
 
@@ -300,6 +323,8 @@ Please wait while we hax your TCP. Thank you.
 
 
 <h2>FIN</h2>
+<div id="bwres"></div>
+<div id="tries"></div>
 <div id="output"></div>
 
 <div id="img-container">

