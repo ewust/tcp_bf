@@ -196,7 +196,7 @@ class ControlWebSocket(Protocol):
         self.transport.write('iframe')
         if (self.spewer_pid == None):
             self.spawnHTTPSpewer() 
-        if (time.time() - self.last_init_iframe) < 60:
+        if (time.time() - self.last_init_iframe) < 25:
             reactor.callLater(float(self.RTT*2.5)/1000, self.make_iframe)
         else:
             # reset the whole thing, try again
